@@ -209,10 +209,12 @@ def _iso(text):
         return None
 
 
-def _seconds(text):
-    """'0:01:02.345' -> 62"""
+def _seconds(value):
+    """Immich 3 sends milliseconds; 2.x sent '0:01:02.345'."""
+    if isinstance(value, (int, float)):
+        return int(value // 1000)
     try:
-        h, m, s = (text or '').split(':')
+        h, m, s = (value or '').split(':')
         return int(int(h) * 3600 + int(m) * 60 + float(s))
     except ValueError:
         return 0

@@ -47,7 +47,7 @@ def columnar(items):
             'ratio': [a['ratio'] for a in items],
             'fileCreatedAt': [(a['taken'] - timedelta(hours=8)).strftime('%Y-%m-%dT%H:%M:%S.000Z') for a in items],
             'localOffsetHours': [8 for _ in items],
-            'duration': ['0:00:05.000000' if a['video'] else None for a in items],
+            'duration': [5000 if a['video'] else None for a in items],
             'livePhotoVideoId': [None for _ in items], 'isFavorite': [a['n'] % 5 == 0 for a in items],
             'city': [a['city'] for a in items], 'country': [a['country'] for a in items]}
 
@@ -55,7 +55,7 @@ def columnar(items):
 def asset_dto(a):
     w = 1440 if a['ratio'] >= 1 else int(1440 * a['ratio'])
     return {'id': a['id'], 'type': 'VIDEO' if a['video'] else 'IMAGE',
-            'localDateTime': a['taken'].strftime('%Y-%m-%dT%H:%M:%S.000Z'), 'duration': '0:00:05.000000',
+            'localDateTime': a['taken'].strftime('%Y-%m-%dT%H:%M:%S.000Z'), 'duration': 5000 if a['video'] else None,
             'width': w, 'height': int(w / a['ratio']), 'isFavorite': a['n'] % 5 == 0,
             'exifInfo': {'city': a['city'], 'country': a['country']}}
 
