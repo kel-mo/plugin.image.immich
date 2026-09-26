@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2230"/>
+      <stop offset="1" stop-color="#0e121a"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff9a5c"/>
+      <stop offset="0.55" stop-color="#ff6f7d"/>
+      <stop offset="1" stop-color="#7b5cff"/>
+    </linearGradient>
+    <linearGradient id="hill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2d3b5a"/>
+      <stop offset="1" stop-color="#151c2c"/>
+    </linearGradient>
+    <clipPath id="photo">
+      <rect x="120" y="150" width="300" height="220" rx="10"/>
+    </clipPath>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <!-- back print -->
+  <g transform="rotate(-9 256 256)">
+    <rect x="96" y="126" width="324" height="274" rx="16" fill="#3a4458"/>
+  </g>
+  <!-- front print -->
+  <g transform="rotate(4 256 256)">
+    <rect x="104" y="134" width="332" height="282" rx="16" fill="#f4f1ea"/>
+    <g clip-path="url(#photo)">
+      <rect x="120" y="150" width="300" height="220" fill="url(#sky)"/>
+      <circle cx="318" cy="238" r="38" fill="#ffe3a3"/>
+      <path d="M120 370 L120 300 L196 236 L252 284 L300 250 L420 332 L420 370 Z" fill="url(#hill)"/>
+    </g>
+    <!-- pan and zoom frame -->
+    <rect x="250" y="190" width="132" height="96" rx="8" fill="none" stroke="#ffffff"
+          stroke-width="6" stroke-dasharray="20 12" opacity="0.9"/>
+  </g>
+</svg>
