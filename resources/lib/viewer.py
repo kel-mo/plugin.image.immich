@@ -98,6 +98,8 @@ class Viewer(xbmcgui.WindowXMLDialog):
         except ApiError as e:
             kodi.log('shuffle refill failed: {}'.format(e), xbmc.LOGWARNING)
             return
+        if not kodi.setting_bool('videos'):
+            batch = [a for a in batch if a['image']]
         new = [a for a in batch if a['id'] not in self.seen]
         if not new:                                 # everything shown once; allow repeats
             self.seen.clear()
