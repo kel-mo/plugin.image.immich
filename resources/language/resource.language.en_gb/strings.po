@@ -31,3 +31,17 @@ msgstr ""
 msgctxt "#30501"
 msgid "Debug logging"
 msgstr ""
+
+# Messages 30600-30699
+
+msgctxt "#30601"
+msgid "Set the Immich server address first"
+msgstr ""
+
+msgctxt "#30614"
+msgid "Could not reach the Immich server"
+msgstr ""
+
+msgctxt "#30615"
+msgid "Immich did not accept the sign-in. Sign in again."
+msgstr ""
