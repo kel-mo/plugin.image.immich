@@ -7,6 +7,7 @@ import xbmc
 import xbmcgui
 
 from . import items, kodi
+from .api import ApiError
 
 SCREEN = 1920 / 1080
 CLOSE = {9, 10, 13, 92}                  # parent dir, previous menu, stop, back
@@ -43,7 +44,16 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.fade = max(int(kodi.setting_number('fade_time') * 1000), 200)
         self.kenburns = kodi.setting_bool('kenburns')
         self.zoom = min(max(kodi.setting_int('zoom'), 100), 160)
-        self.size = 'fullsize' if kodi.setting_bool('hires') else 'preview'
+        self.size = 'preview'
+        if kodi.setting_bool('hires'):
+            try:
+                perms = set((self.client.key_info() or {}).get('permissions') or [])
+            except ApiError:
+                perms = set()
+            if perms & {'all', 'asset.download'}:   # fullsize redirects to the original
+                self.size = 'fullsize'
+            else:
+                kodi.notify(kodi.L(30702))
         self.setProperty('immich.captions', 'true' if kodi.setting_bool('captions') else 'false')
         self.setProperty('immich.clock', 'true' if kodi.setting_bool('clock') else 'false')
         self.layers = [[self.getControl(base + k) for k in range(4)] for base in (100, 200)]

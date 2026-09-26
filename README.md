@@ -22,7 +22,8 @@ Needs Immich 2.0 or newer, and Kodi 21 or 22.
 ## Sign in
 
 1. In Immich, open *Account settings → API keys* and create a key. It needs
-   at least `asset.read`, `asset.view`, `album.read` and `user.read`.
+   at least `asset.read`, `asset.view`, `album.read` and `user.read`, plus
+   `asset.download` if you want full resolution photos.
 2. Open Immich under *Pictures* in Kodi and choose *Sign in*, or open the
    add-on settings.
 3. Enter your server address and the API key.

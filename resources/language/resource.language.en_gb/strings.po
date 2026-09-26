@@ -69,7 +69,7 @@ msgid "API key"
 msgstr ""
 
 msgctxt "#30106"
-msgid "Make one in Immich under Account settings > API keys. It needs at least the asset.read, asset.view, album.read and user.read permissions."
+msgid "Make one in Immich under Account settings > API keys. It needs at least the asset.read, asset.view, album.read and user.read permissions, and asset.download for full resolution photos."
 msgstr ""
 
 msgctxt "#30107"
@@ -149,7 +149,7 @@ msgid "Full resolution"
 msgstr ""
 
 msgctxt "#30217"
-msgid "Loads the original photo instead of a 1440 pixel preview. Slower, especially on small devices."
+msgid "Loads the original photo instead of a 1440 pixel preview. Slower, especially on small devices. The API key needs the asset.download permission."
 msgstr ""
 
 msgctxt "#30500"
@@ -202,4 +202,8 @@ msgstr ""
 
 msgctxt "#30701"
 msgid "Nothing to show"
+msgstr ""
+
+msgctxt "#30702"
+msgid "Full resolution needs an API key with the asset.download permission. Showing previews."
 msgstr ""
