@@ -69,6 +69,8 @@ def root():
     if has_people(client):
         folder(kodi.L(30012), 'people', kodi.ICON)
     folder(kodi.L(30014), 'places', kodi.ICON)
+    if has_favourites(client):
+        folder(kodi.L(30021), 'favourites', kodi.ICON, context=slideshow_menu(source='favourites'))
     if has_albums(client):
         folder(kodi.L(30001), 'albums', kodi.ICON)
     action_item(kodi.L(30006), 'play', source='random', shuffle='1')
@@ -88,6 +90,13 @@ def today_memories(client):
         return client.memories(date.today())
     except ApiError:                            # includes a key without memory.read
         return []
+
+
+def has_favourites(client):
+    try:
+        return bool(client.search_page(1, 1, isFavorite=True)[0])
+    except ApiError:
+        return True
 
 
 def has_people(client):
@@ -275,6 +284,8 @@ def source_assets(client, params):
     if kind == 'memories':
         return [a for y, found in client.memories(date.today()) if not params.get('year') or str(y) == params['year']
                 for a in found]
+    if kind == 'favourites':
+        return client.search(isFavorite=True)
     if kind == 'place':
         return client.search(**place_filters(params))
     if kind == 'person':
@@ -345,6 +356,8 @@ def dispatch(action, params):
         album(ImmichClient(), params)
     elif action == 'memories':
         memories(ImmichClient(), params.get('year'))
+    elif action == 'favourites':
+        searched(ImmichClient(), dict(params, name=kodi.L(30021)), {'source': 'favourites'}, isFavorite=True)
     elif action == 'places':
         places(ImmichClient(), params.get('country'))
     elif action == 'place':

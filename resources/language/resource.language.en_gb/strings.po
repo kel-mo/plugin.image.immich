@@ -94,6 +94,10 @@ msgctxt "#30020"
 msgid "1 place"
 msgstr ""
 
+msgctxt "#30021"
+msgid "Favourites"
+msgstr ""
+
 # Settings 30100-30599
 
 msgctxt "#30100"
