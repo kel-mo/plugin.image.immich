@@ -388,6 +388,10 @@ def dispatch(action, params):
         album(ImmichClient(), params)
     elif action == 'memories':
         memories(ImmichClient(), params.get('year'))
+    elif action == 'today':                     # one flat row of today's memories, for home screen widgets
+        client = ImmichClient()
+        list_assets(client, [a for _, found in today_memories(client) for a in found], {'source': 'memories'},
+                    kodi.L(30017))
     elif action == 'search_menu':
         search_menu()
     elif action == 'new_search':
