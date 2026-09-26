@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """plugin:// router and directory listings."""
 import json
+import random
 import traceback
 from urllib.parse import parse_qsl, urlencode
 
@@ -8,7 +9,7 @@ import xbmc
 import xbmcgui
 import xbmcplugin
 
-from . import items, kodi, signin
+from . import items, kodi, signin, viewer
 from .api import ApiError, AuthError, ImmichClient
 
 BASE = 'plugin://{}/'.format(kodi.ADDON_ID)
@@ -55,12 +56,18 @@ def root():
         return end()
     folder(kodi.L(30000), 'timeline', kodi.ICON)
     folder(kodi.L(30001), 'albums', kodi.ICON)
+    action_item(kodi.L(30006), 'play', source='random', shuffle='1')
     action_item(kodi.L(30003), 'settings')
     end()
 
 
 def month_name(month):
     return xbmc.getLocalizedString(20 + month)                  # Kodi strings 21-32
+
+
+def slideshow_menu(**source):
+    return [(kodi.L(30004), run_plugin('play', shuffle='0', **source)),
+            (kodi.L(30005), run_plugin('play', shuffle='1', **source))]
 
 
 def timeline(client, year=None):
@@ -70,13 +77,16 @@ def timeline(client, year=None):
         for b in buckets:
             years[b['timeBucket'][:4]] = years.get(b['timeBucket'][:4], 0) + b['count']
         for y in sorted(years, reverse=True):
-            folder(y, 'timeline', kodi.ICON, label2=kodi.L(30010, years[y]), year=y)
+            folder(y, 'timeline', kodi.ICON, label2=kodi.L(30010, years[y]),
+                   context=slideshow_menu(source='year', year=y), year=y)
     else:
         xbmcplugin.setPluginCategory(HANDLE, year)
         for b in buckets:
             if b['timeBucket'].startswith(year):
                 name = '{} {}'.format(month_name(int(b['timeBucket'][5:7])), year)
-                folder(name, 'bucket', kodi.ICON, label2=kodi.L(30010, b['count']), bucket=b['timeBucket'], name=name)
+                folder(name, 'bucket', kodi.ICON, label2=kodi.L(30010, b['count']),
+                       context=slideshow_menu(source='bucket', bucket=b['timeBucket']),
+                       bucket=b['timeBucket'], name=name)
     end()
 
 
@@ -89,23 +99,61 @@ def albums(client):
             art = {'thumb': client.thumb_url(a['albumThumbnailAssetId']),
                    'fanart': client.thumb_url(a['albumThumbnailAssetId'], 'preview')}
         name = a.get('albumName') or a['id']
+        source = {'source': 'album', 'album_id': a['id'], 'order': a.get('order')}
         folder(name, 'album', kodi.ICON, art=art, label2=kodi.L(30010, a['assetCount']),
-               album_id=a['id'], name=name, order=a.get('order'))
+               context=slideshow_menu(**source), album_id=a['id'], name=name, order=a.get('order'))
     xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_NONE)
     xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_LABEL)
     end()
 
 
-def list_assets(client, assets, category=None):
+def list_assets(client, assets, source, category=None):
+    """source: params that let the viewer fetch the same assets again."""
     xbmcplugin.setContent(HANDLE, 'images')
     if category:
         xbmcplugin.setPluginCategory(HANDLE, category)
+    if assets:
+        action_item(kodi.L(30004), 'play', **source)
+    own_viewer = kodi.setting_bool('viewer')
     for asset in assets:
-        li, url = items.asset_item(client, asset)
-        xbmcplugin.addDirectoryItem(HANDLE, url, li, isFolder=False)
+        path = url_for('play', start=asset['id'], autoplay='0', shuffle='0', **source) \
+            if own_viewer and asset['image'] else None
+        li, url = items.asset_item(client, asset, path)
+        li.addContextMenuItems([(kodi.L(30004), run_plugin('play', start=asset['id'], shuffle='0', **source))])
+        xbmcplugin.addDirectoryItem(HANDLE, path or url, li, isFolder=False)
     xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_NONE)
     xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_DATE)
     end()
+
+
+def source_assets(client, params):
+    kind = params.get('source')
+    if kind == 'bucket':
+        return client.timeline_bucket(params['bucket'])
+    if kind == 'year':
+        found = []
+        for b in client.timeline_buckets():
+            if b['timeBucket'].startswith(params['year']):
+                found += client.timeline_bucket(b['timeBucket'])
+        return found
+    if kind == 'album':
+        return client.search(order=params.get('order') or 'desc', albumIds=[params['album_id']])
+    if kind == 'random':
+        return client.random(500)
+    return []
+
+
+def play(client, params):
+    xbmc.executebuiltin('ActivateWindow(busydialognocancel)')
+    try:
+        assets = source_assets(client, params)
+    finally:
+        xbmc.executebuiltin('Dialog.Close(busydialognocancel)')
+    shuffle = params.get('shuffle')
+    if shuffle == '1' or (shuffle is None and kodi.setting_bool('shuffle')):
+        random.shuffle(assets)
+    start = next((i for i, a in enumerate(assets) if a['id'] == params.get('start')), 0)
+    viewer.play(client, assets, start, autoplay=params.get('autoplay') != '0')
 
 
 # --------------------------------------------------------------------- main
@@ -153,13 +201,17 @@ def dispatch(action, params):
     elif action == 'timeline':
         timeline(ImmichClient(), params.get('year'))
     elif action == 'bucket':
-        list_assets(ImmichClient(), ImmichClient().timeline_bucket(params['bucket']), params.get('name'))
+        client = ImmichClient()
+        list_assets(client, client.timeline_bucket(params['bucket']), {'source': 'bucket', 'bucket': params['bucket']},
+                    params.get('name'))
     elif action == 'albums':
         albums(ImmichClient())
     elif action == 'album':
         client = ImmichClient()
-        list_assets(client, client.search(order=params.get('order') or 'desc', albumIds=[params['album_id']]),
-                    params.get('name'))
+        source = {'source': 'album', 'album_id': params['album_id'], 'order': params.get('order')}
+        list_assets(client, source_assets(client, source), source, params.get('name'))
+    elif action == 'play':
+        play(ImmichClient(), params)
     else:
         kodi.log('unknown action {}'.format(action), xbmc.LOGWARNING)
         end(False)

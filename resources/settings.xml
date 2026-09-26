@@ -61,6 +61,89 @@
         </setting>
       </group>
     </category>
+    <category id="slideshow" label="30200" help="">
+      <group id="1">
+        <setting id="slide_time" type="integer" label="30201" help="">
+          <level>0</level>
+          <default>5</default>
+          <constraints>
+            <minimum>2</minimum>
+            <step>1</step>
+            <maximum>60</maximum>
+          </constraints>
+          <control type="slider" format="integer">
+            <popup>false</popup>
+            <formatlabel>30202</formatlabel>
+          </control>
+        </setting>
+        <setting id="fade_time" type="number" label="30203" help="">
+          <level>0</level>
+          <default>1.5</default>
+          <constraints>
+            <minimum>0.5</minimum>
+            <step>0.5</step>
+            <maximum>5</maximum>
+          </constraints>
+          <control type="slider" format="number">
+            <popup>false</popup>
+            <formatlabel>30204</formatlabel>
+          </control>
+        </setting>
+        <setting id="kenburns" type="boolean" label="30205" help="30206">
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="zoom" type="integer" label="30207" help="">
+          <level>1</level>
+          <default>125</default>
+          <constraints>
+            <minimum>105</minimum>
+            <step>5</step>
+            <maximum>160</maximum>
+          </constraints>
+          <dependencies>
+            <dependency type="enable" setting="kenburns">true</dependency>
+          </dependencies>
+          <control type="slider" format="integer">
+            <popup>false</popup>
+            <formatlabel>30208</formatlabel>
+          </control>
+        </setting>
+        <setting id="shuffle" type="boolean" label="30209" help="">
+          <level>0</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="videos" type="boolean" label="30210" help="">
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+      </group>
+      <group id="2">
+        <setting id="captions" type="boolean" label="30211" help="30212">
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="clock" type="boolean" label="30213" help="">
+          <level>0</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="viewer" type="boolean" label="30214" help="30215">
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="hires" type="boolean" label="30216" help="30217">
+          <level>0</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
+      </group>
+    </category>
     <category id="advanced" label="30500" help="">
       <group id="1">
         <setting id="debug" type="boolean" label="30501" help="">

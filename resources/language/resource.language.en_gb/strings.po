@@ -34,6 +34,18 @@ msgctxt "#30003"
 msgid "Settings"
 msgstr ""
 
+msgctxt "#30004"
+msgid "Play slideshow"
+msgstr ""
+
+msgctxt "#30005"
+msgid "Shuffle slideshow"
+msgstr ""
+
+msgctxt "#30006"
+msgid "Shuffle everything"
+msgstr ""
+
 msgctxt "#30010"
 msgid "{0} items"
 msgstr ""
@@ -74,6 +86,78 @@ msgstr ""
 
 msgctxt "#30108"
 msgid "Signed in as"
+msgstr ""
+
+msgctxt "#30200"
+msgid "Slideshow"
+msgstr ""
+
+msgctxt "#30201"
+msgid "Time per photo"
+msgstr ""
+
+msgctxt "#30202"
+msgid "{0:d} s"
+msgstr ""
+
+msgctxt "#30203"
+msgid "Crossfade"
+msgstr ""
+
+msgctxt "#30204"
+msgid "{0:.1f} s"
+msgstr ""
+
+msgctxt "#30205"
+msgid "Pan and zoom"
+msgstr ""
+
+msgctxt "#30206"
+msgid "Slowly zoom and pan across each photo (Ken Burns effect)."
+msgstr ""
+
+msgctxt "#30207"
+msgid "Zoom"
+msgstr ""
+
+msgctxt "#30208"
+msgid "{0:d} %"
+msgstr ""
+
+msgctxt "#30209"
+msgid "Shuffle"
+msgstr ""
+
+msgctxt "#30210"
+msgid "Play videos"
+msgstr ""
+
+msgctxt "#30211"
+msgid "Show date and place"
+msgstr ""
+
+msgctxt "#30212"
+msgid "Press Info during the slideshow to show or hide it."
+msgstr ""
+
+msgctxt "#30213"
+msgid "Show clock"
+msgstr ""
+
+msgctxt "#30214"
+msgid "Open photos in the Immich viewer"
+msgstr ""
+
+msgctxt "#30215"
+msgid "Off: use the Kodi picture viewer instead."
+msgstr ""
+
+msgctxt "#30216"
+msgid "Full resolution"
+msgstr ""
+
+msgctxt "#30217"
+msgid "Loads the original photo instead of a 1440 pixel preview. Slower, especially on small devices."
 msgstr ""
 
 msgctxt "#30500"
@@ -156,4 +240,14 @@ msgstr ""
 
 msgctxt "#30627"
 msgid "You can close this page now."
+msgstr ""
+
+# Viewer 30700-30799
+
+msgctxt "#30700"
+msgid "Paused"
+msgstr ""
+
+msgctxt "#30701"
+msgid "Nothing to show"
 msgstr ""

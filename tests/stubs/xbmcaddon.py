@@ -21,5 +21,6 @@ class Addon:
     def getSetting(self, k): return SETTINGS.get(k, '')
     def getSettingBool(self, k): return SETTINGS.get(k, 'false') == 'true'
     def getSettingInt(self, k): return int(SETTINGS.get(k) or 0)
+    def getSettingNumber(self, k): return float(SETTINGS.get(k) or 0)
     def setSetting(self, k, v): SETTINGS[k] = v
     def openSettings(self): pass

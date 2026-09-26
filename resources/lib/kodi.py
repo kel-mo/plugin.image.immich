@@ -34,6 +34,10 @@ def setting_int(key):
     return ADDON.getSettingInt(key)
 
 
+def setting_number(key):
+    return ADDON.getSettingNumber(key)
+
+
 def set_setting(key, value):
     ADDON.setSetting(key, str(value) if value is not None else '')
 

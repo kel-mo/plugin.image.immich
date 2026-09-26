@@ -171,6 +171,9 @@ class ImmichClient:
             page = int(res['nextPage']) if res.get('nextPage') else None
         return out
 
+    def random(self, size=250):
+        return [from_asset(a) for a in self.post('/search/random', {'size': size, 'withExif': True}) or []]
+
     # ------------------------------------------------------------------ media
     def media_url(self, path, **params):
         """Kodi fetches these itself; the API key rides along as a pipe header."""
