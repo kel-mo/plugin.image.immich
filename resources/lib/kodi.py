@@ -26,6 +26,11 @@ def setting(key):
     return ADDON.getSetting(key)
 
 
+def fresh_setting(key):
+    """Read from disk; ADDON keeps a snapshot, and settings buttons run before the dialog saves."""
+    return xbmcaddon.Addon().getSetting(key)
+
+
 def setting_bool(key):
     return ADDON.getSettingBool(key)
 

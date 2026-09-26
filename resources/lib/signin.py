@@ -149,7 +149,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self._allowed():
-            self._send(200, page(kodi.setting('server_url')))
+            self._send(200, page(kodi.fresh_setting('server_url')))
 
     def do_POST(self):
         if not self._allowed():
@@ -231,7 +231,8 @@ def sign_in():
 def enter_key():
     """Remote-only fallback: type the server address and an API key."""
     dialog = xbmcgui.Dialog()
-    server = dialog.input(kodi.L(30101), kodi.setting('server_url') or 'https://', type=xbmcgui.INPUT_ALPHANUM)
+    server = dialog.input(kodi.L(30101), kodi.fresh_setting('server_url') or 'https://',
+                          type=xbmcgui.INPUT_ALPHANUM)
     if not server or server.strip() == 'https://':
         return False
     key = dialog.input(kodi.L(30105), type=xbmcgui.INPUT_ALPHANUM)
