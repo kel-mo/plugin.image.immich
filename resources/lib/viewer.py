@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """Full-screen viewer: Ken Burns pan and zoom, crossfades, captions and inline video."""
+import os
 import random
+import shutil
 import time
 
 import xbmc
 import xbmcgui
 
-from . import items, kodi
+from . import items, kodi, thumbhash
 from .api import ApiError
 
 SCREEN = 1920 / 1080
@@ -86,7 +88,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
             cover.setImage(url, False)
         else:
             cover.setImage('')
-            back.setImage(self.client.thumb_url(asset['id']), False)
+            back.setImage(self.backdrop(asset), False)
             fit.setImage(url, False)
         self.prepared[layer] = (index, full)
 
@@ -102,6 +104,19 @@ class Viewer(xbmcgui.WindowXMLDialog):
             new = batch
         self.seen.update(a['id'] for a in new)
         self.assets += new
+
+    def backdrop(self, asset):
+        """A blurred copy from the asset's thumbhash; the small thumbnail looks blocky when stretched."""
+        if asset.get('thumbhash'):
+            path = os.path.join(backdrop_dir(), asset['id'] + '.png')
+            if not os.path.exists(path):
+                try:
+                    thumbhash.write_png(path, *thumbhash.decode(asset['thumbhash']))
+                except (ValueError, IndexError, OSError) as e:
+                    kodi.log('thumbhash failed: {}'.format(e), xbmc.LOGWARNING)
+                    return self.client.thumb_url(asset['id'])
+            return path
+        return self.client.thumb_url(asset['id'])
 
     def display(self, index, fade=None):
         if self.more and index >= len(self.assets) - 3:
@@ -252,6 +267,10 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.stop_video()
 
 
+def backdrop_dir():
+    return kodi.ensure_dir(os.path.join(kodi.PROFILE, 'backdrops'))
+
+
 def play(client, assets, start=0, autoplay=True, more=None):
     if not kodi.setting_bool('videos'):
         current = assets[start]['id'] if 0 <= start < len(assets) else None
@@ -270,3 +289,4 @@ def play(client, assets, start=0, autoplay=True, more=None):
         window.close()
         del window
         xbmc.executebuiltin('InhibitScreensaver(false)')
+        shutil.rmtree(backdrop_dir(), ignore_errors=True)

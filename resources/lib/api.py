@@ -251,7 +251,8 @@ def from_bucket(row):
     return {'id': row['id'], 'image': bool(row.get('isImage')), 'taken': taken,
             'ratio': row.get('ratio') or 1.0, 'duration': _seconds(row.get('duration')),
             'city': row.get('city'), 'country': row.get('country'),
-            'live': row.get('livePhotoVideoId'), 'favorite': bool(row.get('isFavorite'))}
+            'live': row.get('livePhotoVideoId'), 'favorite': bool(row.get('isFavorite')),
+            'thumbhash': row.get('thumbhash')}
 
 
 def from_asset(a):
@@ -263,4 +264,4 @@ def from_asset(a):
             'ratio': (width / height) if width and height else 1.0,
             'duration': _seconds(a.get('duration')), 'city': exif.get('city'),
             'country': exif.get('country'), 'live': a.get('livePhotoVideoId'),
-            'favorite': bool(a.get('isFavorite'))}
+            'favorite': bool(a.get('isFavorite')), 'thumbhash': a.get('thumbhash')}
