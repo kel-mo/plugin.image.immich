@@ -69,7 +69,8 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.video = None
         self.next_at = None
         self.kb = None
-        self.left = 0
+        self.main = None
+        self.left = self.stay                       # slide time still to run while paused
 
     # --------------------------------------------------------------- slides
     def free_layer(self):
@@ -136,6 +137,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         group, back, cover, fit = self.layers[layer]
         main = cover if self.prepared[layer][1] else fit
         self.kb = None
+        self.main = main if asset['image'] else None
         if self.kenburns and self.playing and asset['image']:
             self.pan_zoom(main, fade)
         else:
@@ -146,6 +148,8 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.shown_at = time.time()
         self.preload_at = self.shown_at + fade / 1000.0 + 0.3
         self.next_at = self.shown_at + self.stay + fade / 1000.0
+        if not self.playing:
+            self.left = self.stay + fade / 1000.0
         if not asset['image']:
             # start once the poster is up
             self.video = {'id': asset['id'], 'at': self.shown_at + fade / 1000.0 + 0.3, 'started': False}
@@ -176,7 +180,11 @@ class Viewer(xbmcgui.WindowXMLDialog):
                                        center=kb['center'], time=0)])
 
     def thaw(self):
-        if self.kb and self.kb['time'] > 0:
+        if self.kb is None:
+            if self.kenburns and self.main is not None:   # shown while paused: start moving now
+                self.pan_zoom(self.main, self.fade)
+            return
+        if self.kb['time'] > 0:
             self.kb['t0'] = time.time()
             self.zoom_to(self.kb['start'], self.kb['time'])
 
