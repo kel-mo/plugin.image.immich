@@ -154,6 +154,12 @@ class ImmichClient:
         """One asset per city, carrying the city, state and country."""
         return self.get('/search/cities') or []
 
+    def memories(self, day):
+        """Immich's "on this day" memories for a date: [(year, assets)], newest first."""
+        found = self.get('/memories', **{'for': day.isoformat(), 'type': 'on_this_day'}) or []
+        out = [((m.get('data') or {}).get('year'), [from_asset(a) for a in m.get('assets') or []]) for m in found]
+        return sorted((m for m in out if m[0] and m[1]), key=lambda m: -m[0])
+
     def search_page(self, page=1, size=PAGE, order='desc', **filters):
         """One page of /search/metadata results: (assets, more pages follow)."""
         body = dict(filters, page=page, size=size, order=order, withExif=True)

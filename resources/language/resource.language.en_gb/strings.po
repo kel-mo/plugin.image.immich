@@ -74,6 +74,18 @@ msgctxt "#30016"
 msgid "{0} places"
 msgstr ""
 
+msgctxt "#30017"
+msgid "On this day"
+msgstr ""
+
+msgctxt "#30018"
+msgid "{0} years ago"
+msgstr ""
+
+msgctxt "#30019"
+msgid "A year ago"
+msgstr ""
+
 # Settings 30100-30599
 
 msgctxt "#30100"

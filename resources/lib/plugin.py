@@ -3,6 +3,7 @@
 import json
 import random
 import traceback
+from datetime import date
 from urllib.parse import parse_qsl, urlencode
 
 import xbmc
@@ -55,8 +56,12 @@ def root():
         action_item(kodi.L(30002), 'signin')
         action_item(kodi.L(30003), 'settings')
         return end()
-    folder(kodi.L(30000), 'timeline', kodi.ICON)
     client = ImmichClient()
+    memories = today_memories(client)
+    if memories:
+        folder(kodi.L(30017), 'memories', kodi.ICON, label2=kodi.L(30010, sum(len(m[1]) for m in memories)),
+               context=slideshow_menu(source='memories'))
+    folder(kodi.L(30000), 'timeline', kodi.ICON)
     if has_people(client):
         folder(kodi.L(30012), 'people', kodi.ICON)
     folder(kodi.L(30014), 'places', kodi.ICON)
@@ -72,6 +77,13 @@ def has_albums(client):
         return any(a.get('assetCount') for a in client.albums())
     except ApiError:
         return True                             # let the listing report the error
+
+
+def today_memories(client):
+    try:
+        return client.memories(date.today())
+    except ApiError:                            # includes a key without memory.read
+        return []
 
 
 def has_people(client):
@@ -166,6 +178,24 @@ def places(client, country=None):
     end()
 
 
+def memories(client, year=None):
+    found = today_memories(client)
+    if year:
+        assets = next((a for y, a in found if str(y) == year), [])
+        return list_assets(client, assets, {'source': 'memories', 'year': year}, kodi.L(30017))
+    if found:
+        action_item(kodi.L(30004), 'play', source='memories')
+    now = date.today().year
+    for y, assets in found:
+        cover = assets[0]['id']
+        ago = kodi.L(30019) if now - y == 1 else kodi.L(30018, now - y)
+        folder(ago, 'memories', art={'thumb': client.thumb_url(cover), 'icon': client.thumb_url(cover),
+                                     'fanart': client.thumb_url(cover, 'preview')},
+               label2='{} · {}'.format(y, kodi.L(30010, len(assets))),
+               context=slideshow_menu(source='memories', year=y), year=y)
+    end()
+
+
 def page_size():
     return min(max(kodi.setting_int('page_size'), 100), 1000)   # Immich pages hold 1000 at most
 
@@ -238,6 +268,9 @@ def source_assets(client, params):
         return found
     if kind == 'album':
         return client.search(order=params.get('order') or 'desc', albumIds=[params['album_id']])
+    if kind == 'memories':
+        return [a for y, found in client.memories(date.today()) if not params.get('year') or str(y) == params['year']
+                for a in found]
     if kind == 'place':
         return client.search(**place_filters(params))
     if kind == 'person':
@@ -306,6 +339,8 @@ def dispatch(action, params):
         albums(ImmichClient())
     elif action == 'album':
         album(ImmichClient(), params)
+    elif action == 'memories':
+        memories(ImmichClient(), params.get('year'))
     elif action == 'places':
         places(ImmichClient(), params.get('country'))
     elif action == 'place':
