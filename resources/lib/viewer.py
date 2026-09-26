@@ -9,7 +9,7 @@ import xbmc
 import xbmcgui
 
 from . import items, kodi, thumbhash
-from .api import ApiError
+from .api import ApiError, ImmichClient
 
 SCREEN = 1920 / 1080
 CLOSE = {9, 10, 13, 92}                  # parent dir, previous menu, stop, back
@@ -17,7 +17,7 @@ PAUSE = {7, 12, 79, 229}                 # select, pause, play, play/pause
 NEXT = {2, 14, 77}                       # right, next item, fast forward
 PREV = {1, 15, 78}                       # left, previous item, rewind
 INFO = {11}
-PORTABLE = {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'}   # every Kodi decodes these
+UNDECODABLE = {'image/avif'}             # originals LibreELEC's Kodi can't show over http
 
 
 def anim(effect, **attrs):
@@ -60,7 +60,9 @@ class Viewer(xbmcgui.WindowXMLDialog):
             else:
                 kodi.notify(kodi.L(30702))
         self.info = 1 if kodi.setting_bool('captions') else 0   # 0 nothing, 1 caption, 2 caption and details
-        self.details = {}
+        self.raws = {}
+        self.quick = ImmichClient(self.client.base_url, self.client.api_key, timeout=5)
+        self.monitor = xbmc.Monitor()
         self.show_info()
         self.setProperty('immich.clock', 'true' if kodi.setting_bool('clock') else 'false')
         self.layers = [[self.getControl(base + k) for k in range(4)] for base in (100, 200)]
@@ -87,7 +89,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         url = self.client.thumb_url(asset['id'], self.photo_size(asset))
         for control in (back, cover, fit):          # Kodi shows the old texture until the new one loads
             control.setImage('')
-        xbmc.Monitor().waitForAbort(0.05)
+        self.monitor.waitForAbort(0.05)
         full = abs(asset['ratio'] - SCREEN) < 0.3
         if full:
             fit.setImage('')
@@ -127,16 +129,27 @@ class Viewer(xbmcgui.WindowXMLDialog):
             return path
         return self.client.thumb_url(asset['id'])
 
+    def raw(self, asset):
+        """The full asset, fetched once and quickly; None on failure so it's tried again later."""
+        if asset['id'] not in self.raws:
+            try:
+                self.raws[asset['id']] = self.quick.asset_raw(asset['id'])
+            except ApiError as e:
+                kodi.log('asset lookup failed: {}'.format(e), xbmc.LOGWARNING)
+                return None
+        return self.raws[asset['id']]
+
     def photo_size(self, asset):
-        """fullsize redirects to the original, which Kodi may not decode (AVIF on LibreELEC)."""
+        """fullsize redirects to web-safe originals, and Kodi may not decode AVIF ones."""
         if self.size != 'fullsize' or not asset['image']:
             return 'preview'
-        if 'mime' not in asset:                     # timeline months don't carry the file type
-            try:
-                asset['mime'] = self.client.asset(asset['id']).get('mime')
-            except ApiError:
-                asset['mime'] = None
-        return 'fullsize' if asset['mime'] in PORTABLE else 'preview'
+        mime = asset.get('mime')
+        if mime is None:                            # timeline months don't carry the file type
+            raw = self.raw(asset)
+            if raw is None:
+                return 'preview'
+            mime = asset['mime'] = raw.get('originalMimeType') or ''
+        return 'preview' if mime in UNDECODABLE else 'fullsize'
 
     def display(self, index, fade=None):
         if self.more and index >= len(self.assets) - 3:
@@ -212,14 +225,12 @@ class Viewer(xbmcgui.WindowXMLDialog):
             self.fill_details(self.assets[self.index])
 
     def fill_details(self, asset):
-        """Fetched only while the panel is open, once per photo."""
-        if asset['id'] not in self.details:
-            try:
-                self.details[asset['id']] = items.details(self.client.asset_raw(asset['id']))
-            except ApiError as e:
-                kodi.log('details failed: {}'.format(e), xbmc.LOGWARNING)
-                return
-        lines = self.details[asset['id']]
+        """Fetched only while the panel is open."""
+        raw = self.raw(asset)
+        if raw is None:
+            self.setProperty('immich.detail', '')
+            return
+        lines = items.details(raw)
         rows = sum(1 + len(line) // 42 for line in lines)        # rough wrap at the panel's width
         self.getControl(301).setHeight(min(60 + 42 * rows, 560))
         self.setProperty('immich.detail', '[CR]'.join(lines))
