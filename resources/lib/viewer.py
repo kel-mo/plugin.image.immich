@@ -17,6 +17,7 @@ PAUSE = {7, 12, 79, 229}                 # select, pause, play, play/pause
 NEXT = {2, 14, 77}                       # right, next item, fast forward
 PREV = {1, 15, 78}                       # left, previous item, rewind
 INFO = {11}
+PORTABLE = {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'}   # every Kodi decodes these
 
 
 def anim(effect, **attrs):
@@ -81,7 +82,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         asset = self.assets[index]
         group, back, cover, fit = self.layers[layer]
         group.setAnimations([anim('fade', start=0, end=0, time=0)])   # may still be fading out
-        url = self.client.thumb_url(asset['id'], self.size if asset['image'] else 'preview')
+        url = self.client.thumb_url(asset['id'], self.photo_size(asset))
         full = abs(asset['ratio'] - SCREEN) < 0.3
         if full:
             fit.setImage('')
@@ -120,6 +121,17 @@ class Viewer(xbmcgui.WindowXMLDialog):
                     return self.client.thumb_url(asset['id'])
             return path
         return self.client.thumb_url(asset['id'])
+
+    def photo_size(self, asset):
+        """fullsize redirects to the original, which Kodi may not decode (AVIF on LibreELEC)."""
+        if self.size != 'fullsize' or not asset['image']:
+            return 'preview'
+        if 'mime' not in asset:                     # timeline months don't carry the file type
+            try:
+                asset['mime'] = self.client.asset(asset['id']).get('mime')
+            except ApiError:
+                asset['mime'] = None
+        return 'fullsize' if asset['mime'] in PORTABLE else 'preview'
 
     def display(self, index, fade=None):
         if self.more and index >= len(self.assets) - 3:

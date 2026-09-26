@@ -150,6 +150,9 @@ class ImmichClient:
                 return out
             page += 1
 
+    def asset(self, asset_id):
+        return from_asset(self.get('/assets/{}'.format(quote(asset_id))) or {'id': asset_id})
+
     def cities(self):
         """One asset per city, carrying the city, state and country."""
         return self.get('/search/cities') or []
@@ -256,4 +259,5 @@ def from_asset(a):
             'ratio': (width / height) if width and height else 1.0,
             'duration': _seconds(a.get('duration')), 'city': exif.get('city'),
             'country': exif.get('country'), 'live': a.get('livePhotoVideoId'),
-            'favorite': bool(a.get('isFavorite')), 'thumbhash': a.get('thumbhash')}
+            'favorite': bool(a.get('isFavorite')), 'thumbhash': a.get('thumbhash'),
+            'mime': a.get('originalMimeType')}
