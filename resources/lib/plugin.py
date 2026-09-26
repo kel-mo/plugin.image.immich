@@ -277,9 +277,9 @@ def bucket(client, params):
 
 def searched(client, params, source, **filters):
     """A page of /search/metadata results with a Next page entry."""
-    size, offset = page_size(), int(params.get('offset') or 0)
-    found, has_more = client.search_page(offset // size + 1, size, params.get('order') or 'desc', **filters)
-    list_assets(client, found, source, params.get('name'), dict(params, offset=offset + size) if has_more else None)
+    page = int(params.get('page') or 1)          # a page number stays right if the page size changes
+    found, has_more = client.search_page(page, page_size(), params.get('order') or 'desc', **filters)
+    list_assets(client, found, source, params.get('name'), dict(params, page=page + 1) if has_more else None)
 
 
 def album(client, params):
