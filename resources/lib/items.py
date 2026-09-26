@@ -34,9 +34,12 @@ def asset_item(client, asset, path=None):
     li = xbmcgui.ListItem(label, place(asset), path=path or url, offscreen=True)
     li.setArt({'thumb': thumb, 'icon': thumb})
     li.setContentLookup(False)
+    li.setProperty('immich.id', asset['id'])
     if asset['taken']:
         li.setDateTime(asset['taken'].strftime('%Y-%m-%dT%H:%M:%S'))
     if asset['image']:
+        if path:
+            return li, url                      # not a picture to Kodi, or its slideshow grabs it
         li.setMimeType('image/jpeg')
         tag = li.getPictureInfoTag()
         if asset['taken']:
@@ -48,5 +51,4 @@ def asset_item(client, asset, path=None):
         tag.setMediaType('video')
         if asset['duration']:
             tag.setDuration(asset['duration'])
-    li.setProperty('immich.id', asset['id'])
     return li, url
