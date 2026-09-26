@@ -6,6 +6,7 @@ API key "test-key"; login kodi@example.com / secret. Images are generated PNGs, 
 import hashlib
 import json
 import os
+import random
 import struct
 import subprocess
 import sys
@@ -156,6 +157,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {'successful': True})
         if not self.authed({}):
             return self.send(401, {'message': 'Authentication required'})
+        if u.path == '/api/search/random':
+            return self.send(200, [asset_dto(a) for a in random.sample(ASSETS, min(int(body.get('size') or 250),
+                                                                                  len(ASSETS)))])
         if u.path == '/api/search/metadata':
             items = ASSETS
             if body.get('albumIds'):
