@@ -44,6 +44,10 @@ def folder(label, action, icon=None, art=None, context=None, label2='', **params
     xbmcplugin.addDirectoryItem(HANDLE, url_for(action, **params), li, isFolder=True)
 
 
+def count(n, one=30009, many=30010):
+    return kodi.L(one) if n == 1 else kodi.L(many, n)
+
+
 def action_item(label, action, **params):
     li = xbmcgui.ListItem(label, offscreen=True)
     li.setArt({'icon': kodi.ICON, 'thumb': kodi.ICON})
@@ -59,7 +63,7 @@ def root():
     client = ImmichClient()
     memories = today_memories(client)
     if memories:
-        folder(kodi.L(30017), 'memories', kodi.ICON, label2=kodi.L(30010, sum(len(m[1]) for m in memories)),
+        folder(kodi.L(30017), 'memories', kodi.ICON, label2=count(sum(len(m[1]) for m in memories)),
                context=slideshow_menu(source='memories'))
     folder(kodi.L(30000), 'timeline', kodi.ICON)
     if has_people(client):
@@ -111,14 +115,14 @@ def timeline(client, year=None):
         for b in buckets:
             years[b['timeBucket'][:4]] = years.get(b['timeBucket'][:4], 0) + b['count']
         for y in sorted(years, reverse=True):
-            folder(y, 'timeline', kodi.ICON, label2=kodi.L(30010, years[y]),
+            folder(y, 'timeline', kodi.ICON, label2=count(years[y]),
                    context=slideshow_menu(source='year', year=y), year=y)
     else:
         xbmcplugin.setPluginCategory(HANDLE, year)
         for b in buckets:
             if b['timeBucket'].startswith(year):
                 name = '{} {}'.format(month_name(int(b['timeBucket'][5:7])), year)
-                folder(name, 'bucket', kodi.ICON, label2=kodi.L(30010, b['count']),
+                folder(name, 'bucket', kodi.ICON, label2=count(b['count']),
                        context=slideshow_menu(source='bucket', bucket=b['timeBucket']),
                        bucket=b['timeBucket'], name=name)
     end()
@@ -134,7 +138,7 @@ def albums(client):
                    'fanart': client.thumb_url(a['albumThumbnailAssetId'], 'preview')}
         name = a.get('albumName') or a['id']
         source = {'source': 'album', 'album_id': a['id'], 'order': a.get('order')}
-        folder(name, 'album', kodi.ICON, art=art, label2=kodi.L(30010, a['assetCount']),
+        folder(name, 'album', kodi.ICON, art=art, label2=count(a['assetCount']),
                context=slideshow_menu(**source), album_id=a['id'], name=name, order=a.get('order'))
     xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_NONE)
     xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_LABEL)
@@ -164,7 +168,7 @@ def places(client, country=None):
     if country is None and len(countries) > 1:
         for c in countries:
             n = sum(1 for x in found if x[0] == c)
-            folder(c or kodi.L(30015), 'places', kodi.ICON, label2=kodi.L(30016, n), country=c, name=c)
+            folder(c or kodi.L(30015), 'places', kodi.ICON, label2=count(n, 30020, 30016), country=c, name=c)
         return end()
     if country is not None:
         xbmcplugin.setPluginCategory(HANDLE, country or kodi.L(30015))
@@ -191,7 +195,7 @@ def memories(client, year=None):
         ago = kodi.L(30019) if now - y == 1 else kodi.L(30018, now - y)
         folder(ago, 'memories', art={'thumb': client.thumb_url(cover), 'icon': client.thumb_url(cover),
                                      'fanart': client.thumb_url(cover, 'preview')},
-               label2='{} · {}'.format(y, kodi.L(30010, len(assets))),
+               label2='{} · {}'.format(y, count(len(assets))),
                context=slideshow_menu(source='memories', year=y), year=y)
     end()
 

@@ -46,6 +46,10 @@ msgctxt "#30006"
 msgid "Shuffle everything"
 msgstr ""
 
+msgctxt "#30009"
+msgid "1 item"
+msgstr ""
+
 msgctxt "#30010"
 msgid "{0} items"
 msgstr ""
@@ -84,6 +88,10 @@ msgstr ""
 
 msgctxt "#30019"
 msgid "A year ago"
+msgstr ""
+
+msgctxt "#30020"
+msgid "1 place"
 msgstr ""
 
 # Settings 30100-30599
