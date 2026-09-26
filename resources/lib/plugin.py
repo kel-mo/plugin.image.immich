@@ -62,12 +62,12 @@ def root():
         action_item(kodi.L(30002), 'signin')
         action_item(kodi.L(30003), 'settings')
         return end()
+    folder(kodi.L(30000), 'timeline', kodi.ICON)
     client = ImmichClient()
     memories = today_memories(client)
     if memories:
         folder(kodi.L(30017), 'memories', kodi.ICON, label2=count(sum(len(m[1]) for m in memories)),
                context=slideshow_menu(source='memories'))
-    folder(kodi.L(30000), 'timeline', kodi.ICON)
     if has_people(client):
         folder(kodi.L(30012), 'people', kodi.ICON)
     folder(kodi.L(30014), 'places', kodi.ICON)
