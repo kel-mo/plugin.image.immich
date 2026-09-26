@@ -54,6 +54,14 @@ msgctxt "#30011"
 msgid "Next page"
 msgstr ""
 
+msgctxt "#30012"
+msgid "People"
+msgstr ""
+
+msgctxt "#30013"
+msgid "Unnamed"
+msgstr ""
+
 # Settings 30100-30599
 
 msgctxt "#30100"

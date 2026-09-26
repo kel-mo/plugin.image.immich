@@ -56,7 +56,10 @@ def root():
         action_item(kodi.L(30003), 'settings')
         return end()
     folder(kodi.L(30000), 'timeline', kodi.ICON)
-    if has_albums(ImmichClient()):
+    client = ImmichClient()
+    if has_people(client):
+        folder(kodi.L(30012), 'people', kodi.ICON)
+    if has_albums(client):
         folder(kodi.L(30001), 'albums', kodi.ICON)
     action_item(kodi.L(30006), 'play', source='random', shuffle='1')
     action_item(kodi.L(30003), 'settings')
@@ -68,6 +71,15 @@ def has_albums(client):
         return any(a.get('assetCount') for a in client.albums())
     except ApiError:
         return True                             # let the listing report the error
+
+
+def has_people(client):
+    try:
+        return bool(client.people())
+    except AuthError:
+        return False                            # key without person.read
+    except ApiError:
+        return True
 
 
 def month_name(month):
@@ -116,6 +128,18 @@ def albums(client):
     end()
 
 
+def people(client):
+    found = client.people()
+    found.sort(key=lambda p: (not p.get('name'), (p.get('name') or '').lower()))   # named first
+    for p in found:
+        name = p.get('name') or kodi.L(30013)
+        face = client.person_thumb_url(p['id'])
+        folder(name, 'person', art={'thumb': face, 'icon': face},
+               context=slideshow_menu(source='person', person_id=p['id']), person_id=p['id'], name=name)
+    xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_NONE)
+    end()
+
+
 def page_size():
     return min(max(kodi.setting_int('page_size'), 100), 1000)   # Immich pages hold 1000 at most
 
@@ -152,12 +176,20 @@ def bucket(client, params):
                 params.get('name'), more)
 
 
-def album(client, params):
+def searched(client, params, source, **filters):
+    """A page of /search/metadata results with a Next page entry."""
     size, offset = page_size(), int(params.get('offset') or 0)
-    source = {'source': 'album', 'album_id': params['album_id'], 'order': params.get('order')}
-    found, has_more = client.search_page(offset // size + 1, size, params.get('order') or 'desc',
-                                         albumIds=[params['album_id']])
+    found, has_more = client.search_page(offset // size + 1, size, params.get('order') or 'desc', **filters)
     list_assets(client, found, source, params.get('name'), dict(params, offset=offset + size) if has_more else None)
+
+
+def album(client, params):
+    source = {'source': 'album', 'album_id': params['album_id'], 'order': params.get('order')}
+    searched(client, params, source, albumIds=[params['album_id']])
+
+
+def person(client, params):
+    searched(client, params, {'source': 'person', 'person_id': params['person_id']}, personIds=[params['person_id']])
 
 
 def source_assets(client, params):
@@ -172,6 +204,8 @@ def source_assets(client, params):
         return found
     if kind == 'album':
         return client.search(order=params.get('order') or 'desc', albumIds=[params['album_id']])
+    if kind == 'person':
+        return client.search(personIds=[params['person_id']])
     if kind == 'random':
         return client.random()
     return []
@@ -236,6 +270,10 @@ def dispatch(action, params):
         albums(ImmichClient())
     elif action == 'album':
         album(ImmichClient(), params)
+    elif action == 'people':
+        people(ImmichClient())
+    elif action == 'person':
+        person(ImmichClient(), params)
     elif action == 'play':
         play(ImmichClient(), params)
     else:

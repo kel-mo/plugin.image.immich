@@ -140,6 +140,16 @@ class ImmichClient:
     def albums(self):
         return self.get('/albums') or []
 
+    def people(self):
+        """Visible people and pets, all pages."""
+        out, page = [], 1
+        while True:
+            res = self.get('/people', page=page, size=500, withHidden='false') or {}
+            out += res.get('people') or []
+            if not res.get('hasNextPage'):
+                return out
+            page += 1
+
     def search_page(self, page=1, size=PAGE, order='desc', **filters):
         """One page of /search/metadata results: (assets, more pages follow)."""
         body = dict(filters, page=page, size=size, order=order, withExif=True)
@@ -168,6 +178,9 @@ class ImmichClient:
         # fullsize only falls back to the original when edits are not requested
         return self.media_url('/assets/{}/thumbnail'.format(asset_id), size=size,
                               edited=None if size == 'fullsize' else 'true')
+
+    def person_thumb_url(self, person_id):
+        return self.media_url('/people/{}/thumbnail'.format(person_id))
 
     def video_url(self, asset_id):
         return self.media_url('/assets/{}/video/playback'.format(asset_id))
