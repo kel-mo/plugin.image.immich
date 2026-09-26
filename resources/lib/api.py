@@ -150,6 +150,9 @@ class ImmichClient:
                 return out
             page += 1
 
+    def asset_raw(self, asset_id):
+        return self.get('/assets/{}'.format(quote(asset_id))) or {}
+
     def asset(self, asset_id):
         return from_asset(self.get('/assets/{}'.format(quote(asset_id))) or {'id': asset_id})
 

@@ -59,7 +59,9 @@ class Viewer(xbmcgui.WindowXMLDialog):
                 self.size = 'fullsize'
             else:
                 kodi.notify(kodi.L(30702))
-        self.setProperty('immich.captions', 'true' if kodi.setting_bool('captions') else 'false')
+        self.info = 1 if kodi.setting_bool('captions') else 0   # 0 nothing, 1 caption, 2 caption and details
+        self.details = {}
+        self.show_info()
         self.setProperty('immich.clock', 'true' if kodi.setting_bool('clock') else 'false')
         self.layers = [[self.getControl(base + k) for k in range(4)] for base in (100, 200)]
         for layer in self.layers:
@@ -200,10 +202,31 @@ class Viewer(xbmcgui.WindowXMLDialog):
             self.kb['t0'] = time.time()
             self.zoom_to(self.kb['start'], self.kb['time'])
 
+    def show_info(self):
+        self.setProperty('immich.captions', 'true' if self.info else 'false')
+        self.setProperty('immich.details', 'true' if self.info == 2 else '')
+        if self.info == 2 and self.assets:
+            self.fill_details(self.assets[self.index])
+
+    def fill_details(self, asset):
+        """Fetched only while the panel is open, once per photo."""
+        if asset['id'] not in self.details:
+            try:
+                self.details[asset['id']] = items.details(self.client.asset_raw(asset['id']))
+            except ApiError as e:
+                kodi.log('details failed: {}'.format(e), xbmc.LOGWARNING)
+                return
+        lines = self.details[asset['id']]
+        rows = sum(1 + len(line) // 42 for line in lines)        # rough wrap at the panel's width
+        self.getControl(301).setHeight(min(60 + 42 * rows, 560))
+        self.setProperty('immich.detail', '[CR]'.join(lines))
+
     def caption(self, asset):
         self.setProperty('immich.date', items.when(asset['taken']))
         self.setProperty('immich.place', items.place(asset))
         total = '' if self.more else ' / {}'.format(len(self.assets))   # endless shuffle has no total
+        if self.info == 2:
+            self.fill_details(asset)
         self.setProperty('immich.position', '{}{}'.format(self.index + 1, total))
 
     # ---------------------------------------------------------------- video
@@ -257,8 +280,8 @@ class Viewer(xbmcgui.WindowXMLDialog):
                 self.freeze()
                 self.left = (self.next_at - now) if self.next_at else self.stay
         elif action in INFO:
-            on = self.getProperty('immich.captions') != 'true'
-            self.setProperty('immich.captions', 'true' if on else 'false')
+            self.info = (self.info + 1) % 3
+            self.show_info()
 
     def run(self):
         self.setup()

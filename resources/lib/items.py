@@ -52,3 +52,54 @@ def asset_item(client, asset, path=None):
         if asset['duration']:
             tag.setDuration(asset['duration'])
     return li, url
+
+
+def _num(value):
+    return ('{:.1f}'.format(value)).rstrip('0').rstrip('.')
+
+
+def details(raw):
+    """Lines for the viewer's info panel from a full /assets/{id} response."""
+    exif = raw.get('exifInfo') or {}
+    lines = []
+    where = ', '.join(p for p in (exif.get('city'), exif.get('state'), exif.get('country')) if p)
+    if where:
+        lines.append(where)
+    names = [p['name'] for p in raw.get('people') or [] if p.get('name')]
+    if names:
+        lines.append(', '.join(names))
+    make, model = (exif.get('make') or '').strip(), (exif.get('model') or '').strip()
+    camera = model if model.lower().startswith(make.lower()) else ' '.join(p for p in (make, model) if p)
+    if camera:
+        lines.append(camera)
+    lens = (exif.get('lensModel') or '').strip()
+    for prefix in (camera, model):
+        if prefix and lens.lower().startswith(prefix.lower()):
+            lens = lens[len(prefix):].strip()      # 'Pixel 9 Pro XL back camera' -> 'back camera'
+            break
+    if lens and lens not in camera:
+        lines.append(lens)
+    shot = []
+    if exif.get('fNumber'):
+        shot.append('\u0192/' + _num(exif['fNumber']))
+    if exif.get('exposureTime'):
+        shot.append('{} s'.format(exif['exposureTime']))
+    if exif.get('iso'):
+        shot.append('ISO {}'.format(exif['iso']))
+    if exif.get('focalLength'):
+        shot.append('{} mm'.format(_num(exif['focalLength'])))
+    if shot:
+        lines.append(' \u00b7 '.join(shot))
+    width, height = exif.get('exifImageWidth') or raw.get('width'), exif.get('exifImageHeight') or raw.get('height')
+    size = []
+    if width and height:
+        size.append('{} \u00d7 {} ({} MP)'.format(width, height, _num(width * height / 1e6)))
+    if exif.get('fileSizeInByte'):
+        size.append('{} MB'.format(_num(exif['fileSizeInByte'] / 1e6)))
+    if size:
+        lines.append(' \u00b7 '.join(size))
+    if raw.get('originalFileName'):
+        lines.append(raw['originalFileName'])
+    if (exif.get('description') or '').strip():
+        lines += ['', exif['description'].strip()]
+    return lines

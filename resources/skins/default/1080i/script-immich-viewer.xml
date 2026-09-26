@@ -56,6 +56,28 @@
       <visible>String.IsEqual(Window.Property(immich.video),true)</visible>
     </control>
 
+    <!-- details, toggled with Info -->
+    <control type="group">
+      <left>1240</left>
+      <top>140</top>
+      <visible>String.IsEqual(Window.Property(immich.details),true)</visible>
+      <animation effect="fade" time="300">VisibleChange</animation>
+      <control type="image" id="301">
+        <width>620</width>
+        <height>560</height>
+        <texture colordiffuse="B0000000">white.png</texture>
+      </control>
+      <control type="textbox">
+        <left>36</left>
+        <top>30</top>
+        <width>548</width>
+        <height>500</height>
+        <font>font13</font>
+        <textcolor>EEFFFFFF</textcolor>
+        <label>$INFO[Window.Property(immich.detail)]</label>
+      </control>
+    </control>
+
     <!-- caption -->
     <control type="group">
       <visible>String.IsEqual(Window.Property(immich.captions),true) + !String.IsEmpty(Window.Property(immich.date))</visible>
