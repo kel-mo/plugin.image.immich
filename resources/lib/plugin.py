@@ -26,7 +26,8 @@ def run_plugin(action, **params):
 
 
 def end(succeeded=True, cache_to_disc=False):
-    xbmcplugin.endOfDirectory(HANDLE, succeeded, cacheToDisc=cache_to_disc)
+    if HANDLE >= 0:                              # RunPlugin calls have no listing
+        xbmcplugin.endOfDirectory(HANDLE, succeeded, cacheToDisc=cache_to_disc)
 
 
 def folder(label, action, icon=None, art=None, context=None, label2='', **params):
@@ -167,18 +168,15 @@ def run(argv):
         dispatch(action, params)
     except AuthError as e:
         kodi.error(str(e))
-        if HANDLE >= 0:
-            end(False)
+        end(False)
     except ApiError as e:
         kodi.log('request failed: {}'.format(e), xbmc.LOGERROR)
         kodi.error(str(e))
-        if HANDLE >= 0:
-            end(False)
+        end(False)
     except Exception as e:  # keep Kodi from waiting on a listing that never ends
         kodi.log(traceback.format_exc(), xbmc.LOGERROR)
         kodi.error(str(e))
-        if HANDLE >= 0:
-            end(False)
+        end(False)
 
 
 def dispatch(action, params):
