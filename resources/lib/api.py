@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
 """Minimal Immich REST client built on urllib (no external dependencies)."""
-import hashlib
 import json
-import os
 import socket
 import ssl
-import time
 from datetime import datetime, timedelta
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
@@ -18,7 +15,6 @@ from . import kodi
 MIN_SERVER = (2, 0, 0)
 TIMEOUT = 30
 PAGE = 1000
-CACHE_TTL = 600                          # seconds lists are reused for
 
 class ApiError(Exception):
     def __init__(self, message, status=None, detail=None):
@@ -117,24 +113,6 @@ class ImmichClient:
         except ValueError:
             raise ApiError('{}: non-JSON response for {}'.format(kodi.L(30614), path))
 
-    def cached(self, method, path, params=None, body=None):
-        """Lists are kept on disk for a while; every plugin call is a new process."""
-        key = json.dumps([method, self.url(path, **(params or {})), body, self.api_key], sort_keys=True)
-        name = os.path.join(cache_dir(), hashlib.sha256(key.encode('utf-8')).hexdigest()[:24] + '.json')
-        try:
-            if time.time() - os.path.getmtime(name) < CACHE_TTL:
-                with open(name, encoding='utf-8') as f:
-                    return json.load(f)
-        except (OSError, ValueError):
-            pass
-        data = self.request(method, path, params=params, body=body)
-        sweep()
-        tmp = name + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump(data, f, separators=(',', ':'))
-        os.replace(tmp, name)
-        return data
-
     def get(self, path, **params):
         return self.request('GET', path, params=params)
 
@@ -153,19 +131,19 @@ class ImmichClient:
 
     # ---------------------------------------------------------------- library
     def timeline_buckets(self, **filters):
-        return self.cached('GET', '/timeline/buckets', _filters(filters))
+        return self.get('/timeline/buckets', **_filters(filters))
 
     def timeline_bucket(self, time_bucket, **filters):
-        cols = self.cached('GET', '/timeline/bucket', dict(_filters(filters), timeBucket=time_bucket)) or {}
+        cols = self.get('/timeline/bucket', timeBucket=time_bucket, **_filters(filters)) or {}
         return [from_bucket(row) for row in _rows(cols)]
 
     def albums(self):
-        return self.cached('GET', '/albums') or []
+        return self.get('/albums') or []
 
     def search_page(self, page=1, size=PAGE, order='desc', **filters):
         """One page of /search/metadata results: (assets, more pages follow)."""
         body = dict(filters, page=page, size=size, order=order, withExif=True)
-        res = (self.cached('POST', '/search/metadata', body=body) or {}).get('assets') or {}
+        res = (self.post('/search/metadata', body) or {}).get('assets') or {}
         return [from_asset(a) for a in res.get('items') or []], bool(res.get('nextPage'))
 
     def search(self, order='desc', **filters):
@@ -196,21 +174,6 @@ class ImmichClient:
 
     def original_url(self, asset_id):
         return self.media_url('/assets/{}/original'.format(asset_id))
-
-
-def cache_dir():
-    return kodi.ensure_dir(os.path.join(kodi.PROFILE, 'cache'))
-
-
-def sweep():
-    """Drop cached lists past their time."""
-    now = time.time()
-    for entry in os.scandir(cache_dir()):
-        try:
-            if now - entry.stat().st_mtime > CACHE_TTL:
-                os.remove(entry.path)
-        except OSError:
-            pass
 
 
 def _filters(filters):
