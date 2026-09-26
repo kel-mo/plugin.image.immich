@@ -36,9 +36,9 @@ def clean_url(url):
     if url.endswith('/api'):
         url = url[:-4]
     if url and not url.startswith(('http://', 'https://')):
-        host = url.split('/')[0]
-        # a bare IP or host:port is usually Immich on the LAN, served over plain http
-        plain = ':' in host or host.replace('.', '').isdigit()
+        host = url.split('/')[0].rsplit(':', 1)[0].strip('[]')
+        # an IP or single-label name (nas:2283) is usually Immich on the LAN, served over plain http
+        plain = '.' not in host or host.replace('.', '').isdigit() or ':' in host
         url = ('http://' if plain else 'https://') + url
     return url
 

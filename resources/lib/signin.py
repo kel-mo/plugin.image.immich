@@ -63,9 +63,9 @@ def check():
 def sign_in():
     """Type or paste the server address and an API key."""
     dialog = xbmcgui.Dialog()
-    server = dialog.input(kodi.L(30101), kodi.fresh_setting('server_url') or 'https://',
+    server = dialog.input(kodi.L(30101), kodi.fresh_setting('server_url'),
                           type=xbmcgui.INPUT_ALPHANUM)
-    if not server or server.strip() == 'https://':
+    if not server.strip():
         return False
     api_key = dialog.input(kodi.L(30105), type=xbmcgui.INPUT_ALPHANUM)
     if not api_key:
