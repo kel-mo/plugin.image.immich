@@ -245,12 +245,12 @@ def page_size():
     return min(max(kodi.setting_int('page_size'), 100), 1000)   # Immich pages hold 1000 at most
 
 
-def list_assets(client, assets, source, category=None, more=None):
+def list_assets(client, assets, source, category=None, more=None, play=True):
     """source: params that let the viewer fetch the same assets again; more: next page params."""
     xbmcplugin.setContent(HANDLE, 'images')
     if category:
         xbmcplugin.setPluginCategory(HANDLE, category)
-    if assets:
+    if assets and play:
         action_item(kodi.L(30004), 'play', **source)
     own_viewer = kodi.setting_bool('viewer')
     for asset in assets:
@@ -395,7 +395,7 @@ def dispatch(action, params):
     elif action == 'today':                     # one flat row of today's memories, for home screen widgets
         client = ImmichClient()
         list_assets(client, [a for _, found in today_memories(client) for a in found], {'source': 'memories'},
-                    kodi.L(30017))
+                    kodi.L(30017), play=False)
     elif action == 'search_menu':
         search_menu()
     elif action == 'new_search':
