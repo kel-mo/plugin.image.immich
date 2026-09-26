@@ -172,7 +172,8 @@ class ImmichClient:
         return out
 
     def random(self, size=250):
-        return [from_asset(a) for a in self.post('/search/random', {'size': size, 'withExif': True}) or []]
+        body = {'size': size, 'withExif': True, 'visibility': 'timeline'}   # skips live-photo clips, archive
+        return [from_asset(a) for a in self.post('/search/random', body) or []]
 
     # ------------------------------------------------------------------ media
     def media_url(self, path, **params):
