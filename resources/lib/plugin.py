@@ -54,6 +54,7 @@ def root():
         action_item(kodi.L(30003), 'settings')
         return end()
     folder(kodi.L(30000), 'timeline', kodi.ICON)
+    folder(kodi.L(30001), 'albums', kodi.ICON)
     action_item(kodi.L(30003), 'settings')
     end()
 
@@ -76,6 +77,22 @@ def timeline(client, year=None):
             if b['timeBucket'].startswith(year):
                 name = '{} {}'.format(month_name(int(b['timeBucket'][5:7])), year)
                 folder(name, 'bucket', kodi.ICON, label2=kodi.L(30010, b['count']), bucket=b['timeBucket'], name=name)
+    end()
+
+
+def albums(client):
+    found = [a for a in client.albums() if a.get('assetCount')]
+    found.sort(key=lambda a: a.get('endDate') or a.get('updatedAt') or '', reverse=True)
+    for a in found:
+        art = {}
+        if a.get('albumThumbnailAssetId'):
+            art = {'thumb': client.thumb_url(a['albumThumbnailAssetId']),
+                   'fanart': client.thumb_url(a['albumThumbnailAssetId'], 'preview')}
+        name = a.get('albumName') or a['id']
+        folder(name, 'album', kodi.ICON, art=art, label2=kodi.L(30010, a['assetCount']),
+               album_id=a['id'], name=name, order=a.get('order'))
+    xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_NONE)
+    xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_LABEL)
     end()
 
 
@@ -137,6 +154,12 @@ def dispatch(action, params):
         timeline(ImmichClient(), params.get('year'))
     elif action == 'bucket':
         list_assets(ImmichClient(), ImmichClient().timeline_bucket(params['bucket']), params.get('name'))
+    elif action == 'albums':
+        albums(ImmichClient())
+    elif action == 'album':
+        client = ImmichClient()
+        list_assets(client, client.search(order=params.get('order') or 'desc', albumIds=[params['album_id']]),
+                    params.get('name'))
     else:
         kodi.log('unknown action {}'.format(action), xbmc.LOGWARNING)
         end(False)

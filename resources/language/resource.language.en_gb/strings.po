@@ -22,6 +22,10 @@ msgctxt "#30000"
 msgid "Timeline"
 msgstr ""
 
+msgctxt "#30001"
+msgid "Albums"
+msgstr ""
+
 msgctxt "#30002"
 msgid "Sign in"
 msgstr ""
