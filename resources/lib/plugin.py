@@ -235,10 +235,10 @@ def new_search():
 
 
 def search(client, params):
-    offset = int(params.get('offset') or 0)
-    found, has_more = client.smart_page(params['query'], offset // SEARCH_PAGE + 1, SEARCH_PAGE)
-    more = dict(params, offset=offset + SEARCH_PAGE) if has_more else None
-    list_assets(client, found, {'source': 'search', 'query': params['query']}, params['query'], more)
+    page = int(params.get('page') or 1)
+    found, has_more = client.smart_page(params['query'], page, SEARCH_PAGE)
+    more = dict(params, page=page + 1) if has_more else None
+    list_assets(client, found, {'source': 'search', 'query': params['query'], 'upto': page}, params['query'], more)
 
 
 def page_size():
@@ -318,7 +318,8 @@ def source_assets(client, params):
         return [a for y, found in client.memories(date.today()) if not params.get('year') or str(y) == params['year']
                 for a in found]
     if kind == 'search':
-        return [a for page in (1, 2) for a in client.smart_page(params['query'], page, SEARCH_PAGE)[0]]
+        last = max(2, int(params.get('upto') or 1))    # reach the page a photo was picked from
+        return [a for page in range(1, last + 1) for a in client.smart_page(params['query'], page, SEARCH_PAGE)[0]]
     if kind == 'favourites':
         return client.search(isFavorite=True, visibility=TIMELINE)
     if kind == 'place':
