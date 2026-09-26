@@ -57,4 +57,6 @@ add-on settings.
 
 ---
 
-GPL-2.0-or-later. Not affiliated with the Immich project.
+GPL-2.0-or-later. The thumbhash decoder is ported from
+[evanw/thumbhash](https://github.com/evanw/thumbhash) (MIT). Not affiliated with the
+Immich project.
