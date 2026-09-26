@@ -85,6 +85,9 @@ class Viewer(xbmcgui.WindowXMLDialog):
         group, back, cover, fit = self.layers[layer]
         group.setAnimations([anim('fade', start=0, end=0, time=0)])   # may still be fading out
         url = self.client.thumb_url(asset['id'], self.photo_size(asset))
+        for control in (back, cover, fit):          # Kodi shows the old texture until the new one loads
+            control.setImage('')
+        xbmc.Monitor().waitForAbort(0.05)
         full = abs(asset['ratio'] - SCREEN) < 0.3
         if full:
             fit.setImage('')
