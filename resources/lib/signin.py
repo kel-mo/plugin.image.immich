@@ -16,6 +16,7 @@ from . import kodi, qr
 from .api import MIN_SERVER, SCOPES, ApiError, AuthError, ImmichClient, clean_url
 
 TIMEOUT = 600
+PORT = 8765                              # fixed so a firewall can allow it
 ACTION_CANCEL = {9, 10, 13, 92}  # parent dir, previous menu, stop, nav back
 REQUIRED = {'asset.read', 'asset.view', 'album.read', 'user.read'}
 
@@ -117,7 +118,10 @@ class SignInServer(HTTPServer):
     timeout = 0.25
 
     def __init__(self):
-        super().__init__(('', 0), Handler)
+        try:
+            super().__init__(('', PORT), Handler)
+        except OSError:
+            super().__init__(('', 0), Handler)
         self.token = secrets.token_urlsafe(6)
         self.result = None
 
@@ -184,7 +188,7 @@ class SignInDialog(xbmcgui.WindowDialog):
         self.addControl(xbmcgui.ControlLabel(x, 140, w, 40, kodi.L(30600), font='font14', textColor='0xFFFFFFFF'))
         self.addControl(xbmcgui.ControlLabel(x, 200, w, 30, kodi.L(30602), font='font13', textColor='0xFFCCCCCC'))
         self.addControl(xbmcgui.ControlLabel(x, 235, w, 30, url, font='font12', textColor='0xFFFF9A5C'))
-        info = xbmcgui.ControlTextBox(x, 290, w, 90, font='font12', textColor='0xFFCCCCCC')
+        info = xbmcgui.ControlTextBox(x, 285, w, 115, font='font12', textColor='0xFFCCCCCC')
         self.addControl(info)
         info.setText(kodi.L(30607))
         self.addControl(xbmcgui.ControlLabel(x, 400, w, 30, kodi.L(30603), font='font13', textColor='0xFFCCCCCC'))

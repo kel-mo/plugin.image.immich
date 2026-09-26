@@ -191,7 +191,7 @@ msgid "Signed in as {0}"
 msgstr ""
 
 msgctxt "#30607"
-msgid "Your phone must be on the same network as Kodi. Then paste an API key, or sign in with your Immich email and password."
+msgid "Your phone must be on the same network as Kodi. Then paste an API key, or sign in with your Immich email and password. Page does not open? A firewall may block port 8765; use Enter an API key in the settings instead."
 msgstr ""
 
 msgctxt "#30608"
