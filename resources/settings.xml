@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<settings version="1">
+  <section id="plugin.image.immich">
+    <category id="advanced" label="30500" help="">
+      <group id="1">
+        <setting id="debug" type="boolean" label="30501" help="">
+          <level>2</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
+      </group>
+    </category>
+  </section>
+</settings>
