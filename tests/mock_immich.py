@@ -175,6 +175,15 @@ class Handler(BaseHTTPRequestHandler):
             pe = next((x for x in PEOPLE if x['id'] == parts[3]), None)
             if pe:
                 return self.send(200, png(pe['members'][0], 250), 'image/png')
+        if len(parts) == 4 and parts[2] == 'assets' and parts[3] in BY_ID:
+            a = BY_ID[parts[3]]
+            dto = asset_dto(a)
+            dto['originalMimeType'] = 'image/avif' if a['n'] % 7 == 3 else 'image/jpeg'
+            dto['originalFileName'] = 'IMG_{:04d}.jpg'.format(a['n'])
+            dto['exifInfo'].update(make='Google', model='Pixel 9 Pro XL', fNumber=1.7, iso=100, exposureTime='1/120',
+                                   lensModel='Pixel 9 Pro XL back camera 6.9mm f/1.68', focalLength=6.9)
+            dto['people'] = [{'name': p['name']} for p in PEOPLE if a in p['members'] and p['name']]
+            return self.send(200, dto)
         if len(parts) >= 5 and parts[2] == 'assets' and parts[3] in BY_ID:
             a = BY_ID[parts[3]]
             if parts[4] == 'thumbnail':
