@@ -98,6 +98,18 @@ msgctxt "#30021"
 msgid "Favourites"
 msgstr ""
 
+msgctxt "#30022"
+msgid "Search"
+msgstr ""
+
+msgctxt "#30023"
+msgid "New search"
+msgstr ""
+
+msgctxt "#30024"
+msgid "Describe what you are looking for"
+msgstr ""
+
 # Settings 30100-30599
 
 msgctxt "#30100"

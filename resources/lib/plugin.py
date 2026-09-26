@@ -15,6 +15,8 @@ from .api import ApiError, AuthError, ImmichClient
 
 BASE = 'plugin://{}/'.format(kodi.ADDON_ID)
 HANDLE = -1
+SEARCH_PAGE = 100                        # matches get weaker further down
+RECENT = 10
 
 
 def url_for(action, **params):
@@ -73,6 +75,7 @@ def root():
         folder(kodi.L(30021), 'favourites', kodi.ICON, context=slideshow_menu(source='favourites'))
     if has_albums(client):
         folder(kodi.L(30001), 'albums', kodi.ICON)
+    folder(kodi.L(30022), 'search_menu', kodi.ICON)
     action_item(kodi.L(30006), 'play', source='random', shuffle='1')
     action_item(kodi.L(30003), 'settings')
     end()
@@ -209,6 +212,33 @@ def memories(client, year=None):
     end()
 
 
+def recent_searches():
+    return kodi.read_json(kodi.profile_file('searches.json'), [])
+
+
+def search_menu():
+    action_item(kodi.L(30023), 'new_search')
+    for query in recent_searches():
+        folder(query, 'search', kodi.ICON, context=slideshow_menu(source='search', query=query), query=query)
+    end()
+
+
+def new_search():
+    query = xbmcgui.Dialog().input(kodi.L(30024)).strip()
+    if not query:
+        return
+    kodi.write_json(kodi.profile_file('searches.json'),
+                    ([query] + [q for q in recent_searches() if q.lower() != query.lower()])[:RECENT])
+    xbmc.executebuiltin('Container.Update({})'.format(url_for('search', query=query)))
+
+
+def search(client, params):
+    offset = int(params.get('offset') or 0)
+    found, has_more = client.smart_page(params['query'], offset // SEARCH_PAGE + 1, SEARCH_PAGE)
+    more = dict(params, offset=offset + SEARCH_PAGE) if has_more else None
+    list_assets(client, found, {'source': 'search', 'query': params['query']}, params['query'], more)
+
+
 def page_size():
     return min(max(kodi.setting_int('page_size'), 100), 1000)   # Immich pages hold 1000 at most
 
@@ -284,6 +314,8 @@ def source_assets(client, params):
     if kind == 'memories':
         return [a for y, found in client.memories(date.today()) if not params.get('year') or str(y) == params['year']
                 for a in found]
+    if kind == 'search':
+        return [a for page in (1, 2) for a in client.smart_page(params['query'], page, SEARCH_PAGE)[0]]
     if kind == 'favourites':
         return client.search(isFavorite=True)
     if kind == 'place':
@@ -356,6 +388,12 @@ def dispatch(action, params):
         album(ImmichClient(), params)
     elif action == 'memories':
         memories(ImmichClient(), params.get('year'))
+    elif action == 'search_menu':
+        search_menu()
+    elif action == 'new_search':
+        new_search()
+    elif action == 'search':
+        search(ImmichClient(), params)
     elif action == 'favourites':
         searched(ImmichClient(), dict(params, name=kodi.L(30021)), {'source': 'favourites'}, isFavorite=True)
     elif action == 'places':
