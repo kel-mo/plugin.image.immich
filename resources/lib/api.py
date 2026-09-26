@@ -140,6 +140,10 @@ class ImmichClient:
     def albums(self):
         return self.get('/albums') or []
 
+    def has_people(self):
+        res = self.get('/people', page=1, size=1, withHidden='false') or {}
+        return bool(res.get('people') or res.get('total'))
+
     def people(self):
         """Visible people and pets, all pages."""
         out, page = [], 1

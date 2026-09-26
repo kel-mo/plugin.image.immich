@@ -17,6 +17,7 @@ BASE = 'plugin://{}/'.format(kodi.ADDON_ID)
 HANDLE = -1
 SEARCH_PAGE = 100                        # matches get weaker further down
 RECENT = 10
+PROBE_TIMEOUT = 5                        # root menu checks; the lists themselves wait longer
 TIMELINE = 'timeline'                    # leaves out archived photos and live-photo clips
 NO_COUNTRY = '-'                         # empty values drop out of plugin URLs
 
@@ -65,17 +66,18 @@ def root():
         action_item(kodi.L(30003), 'settings')
         return end()
     folder(kodi.L(30000), 'timeline', kodi.ICON)
-    client = ImmichClient()
-    memories = today_memories(client)
+    client = ImmichClient(timeout=PROBE_TIMEOUT)
+    probe = Probe()
+    memories = probe(lambda: client.memories(date.today()), [], [])
     if memories:
         folder(kodi.L(30017), 'memories', kodi.ICON, label2=count(sum(len(m[1]) for m in memories)),
                context=slideshow_menu(source='memories'))
-    if has_people(client):
+    if probe(lambda: client.has_people(), False, True):
         folder(kodi.L(30012), 'people', kodi.ICON)
     folder(kodi.L(30014), 'places', kodi.ICON)
-    if has_favourites(client):
+    if probe(lambda: bool(client.search_page(1, 1, isFavorite=True, visibility=TIMELINE)[0]), True, True):
         folder(kodi.L(30021), 'favourites', kodi.ICON, context=slideshow_menu(source='favourites'))
-    if has_albums(client):
+    if probe(lambda: any(a.get('assetCount') for a in client.albums()), True, True):
         folder(kodi.L(30001), 'albums', kodi.ICON)
     folder(kodi.L(30022), 'search_menu', kodi.ICON)
     action_item(kodi.L(30006), 'play', source='random', shuffle='1')
@@ -83,11 +85,22 @@ def root():
     end()
 
 
-def has_albums(client):
-    try:
-        return any(a.get('assetCount') for a in client.albums())
-    except ApiError:
-        return True                             # let the listing report the error
+class Probe:
+    """Checks whether a root entry has anything; once the server is unreachable, stop asking."""
+    def __init__(self):
+        self.offline = False
+
+    def __call__(self, check, denied, failed):
+        """denied: result for a key without the permission; failed: for any other error."""
+        if self.offline:
+            return failed
+        try:
+            return check()
+        except AuthError:
+            return denied
+        except ApiError as e:
+            self.offline = e.status is None
+            return failed
 
 
 def today_memories(client):
@@ -95,22 +108,6 @@ def today_memories(client):
         return client.memories(date.today())
     except ApiError:                            # includes a key without memory.read
         return []
-
-
-def has_favourites(client):
-    try:
-        return bool(client.search_page(1, 1, isFavorite=True, visibility=TIMELINE)[0])
-    except ApiError:
-        return True
-
-
-def has_people(client):
-    try:
-        return bool(client.people())
-    except AuthError:
-        return False                            # key without person.read
-    except ApiError:
-        return True
 
 
 def month_name(month):
