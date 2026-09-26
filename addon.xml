@@ -8,13 +8,13 @@
   </extension>
   <extension point="xbmc.addon.metadata">
     <summary lang="en_GB">View your Immich photos and videos in Kodi</summary>
-    <description lang="en_GB">Browse the timeline and albums of a self-hosted Immich server and watch them as a slideshow with slow pan and zoom. View only: nothing is changed on the server.</description>
+    <description lang="en_GB">Browse the timeline, On this day, people and pets, places, albums and favourites of a self-hosted Immich server, or search by description. Watch them as a slideshow that crossfades and slowly pans and zooms across each photo, with photo details at the press of Info. View only: nothing is changed on the server.</description>
     <disclaimer lang="en_GB">Requires an Immich server that you own or have an account on. Not affiliated with the Immich project.</disclaimer>
     <platform>all</platform>
     <license>GPL-2.0-or-later</license>
     <source>https://github.com/kel-mo/plugin.image.immich</source>
     <website>https://immich.app</website>
-    <news>v0.1.0: initial release - sign in, timeline, albums and slideshow</news>
+    <news>v0.1.0: initial release - timeline, On this day, people, places, albums, favourites, search, and a pan and zoom slideshow</news>
     <assets>
       <icon>resources/icon.png</icon>
     </assets>
