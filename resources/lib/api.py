@@ -36,9 +36,11 @@ def clean_url(url):
     if url.endswith('/api'):
         url = url[:-4]
     if url and not url.startswith(('http://', 'https://')):
-        host = url.split('/')[0].rsplit(':', 1)[0].strip('[]')
-        # an IP or single-label name (nas:2283) is usually Immich on the LAN, served over plain http
-        plain = '.' not in host or host.replace('.', '').isdigit() or ':' in host
+        netloc = url.split('/')[0]
+        host = netloc.rsplit(':', 1)[0].strip('[]').lower()
+        # IPs, single-label names, LAN domains and Immich's own port are usually plain http
+        plain = ('.' not in host or host.replace('.', '').isdigit() or ':' in host or netloc.endswith(':2283')
+                 or host.endswith(('.local', '.lan', '.home.arpa', '.internal')))
         url = ('http://' if plain else 'https://') + url
     return url
 
