@@ -41,11 +41,19 @@ library. During the slideshow:
 |---|---|
 | Left / Right | Previous / next |
 | Select, Play, Pause | Pause or resume |
-| Info | Show or hide date and place |
+| Info | Caption, caption and photo details, or nothing |
 | Back | Close |
 
 Time per photo, crossfade, pan and zoom, shuffle and videos are in the
 add-on settings.
+
+## On the home screen
+
+- Estuary: open *On this day* (or anything else) in the add-on, open its
+  context menu and choose *Add to favourites*. It then shows under Home →
+  Favourites.
+- Skins with custom widgets: use `plugin://plugin.image.immich/?action=today`
+  for a row of today's memories.
 
 ---
 
