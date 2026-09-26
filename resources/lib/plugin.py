@@ -17,6 +17,7 @@ BASE = 'plugin://{}/'.format(kodi.ADDON_ID)
 HANDLE = -1
 SEARCH_PAGE = 100                        # matches get weaker further down
 RECENT = 10
+NO_COUNTRY = '-'                         # empty values drop out of plugin URLs
 
 
 def url_for(action, **params):
@@ -177,10 +178,13 @@ def places(client, country=None):
         if exif.get('city'):
             found.append((exif.get('country') or '', exif.get('state') or '', exif['city'], a['id']))
     countries = sorted({c for c, _, _, _ in found})
+    if country == NO_COUNTRY:
+        country = ''
     if country is None and len(countries) > 1:
         for c in countries:
             n = sum(1 for x in found if x[0] == c)
-            folder(c or kodi.L(30015), 'places', kodi.ICON, label2=count(n, 30020, 30016), country=c, name=c)
+            folder(c or kodi.L(30015), 'places', kodi.ICON, label2=count(n, 30020, 30016), country=c or NO_COUNTRY,
+                   name=c)
         return end()
     if country is not None:
         xbmcplugin.setPluginCategory(HANDLE, country or kodi.L(30015))
