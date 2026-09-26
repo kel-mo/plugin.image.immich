@@ -129,7 +129,7 @@ msgid "API key"
 msgstr ""
 
 msgctxt "#30106"
-msgid "Make one in Immich under Account settings > API keys. It needs at least the asset.read, asset.view, album.read and user.read permissions, and asset.download for full resolution photos."
+msgid "Make one in Immich under Account settings > API keys. It needs at least asset.read, asset.view, album.read and user.read; person.read adds people, memory.read adds On this day and asset.download allows full resolution."
 msgstr ""
 
 msgctxt "#30107"

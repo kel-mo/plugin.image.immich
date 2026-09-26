@@ -3,8 +3,10 @@
 # Immich for Kodi
 
 View the photos and videos of your self-hosted [Immich](https://immich.app)
-server on Kodi. Browse the timeline and albums, or sit back and watch them as a
-slideshow that crossfades and slowly pans and zooms across each photo.
+server on Kodi. Browse *On this day*, the timeline, people and pets, places,
+albums and favourites, or search by description ("beach at sunset"). Or sit
+back and watch them as a slideshow that crossfades and slowly pans and zooms
+across each photo.
 
 View only: the add-on never changes anything on the server.
 
@@ -22,16 +24,17 @@ Needs Immich 2.0 or newer, and Kodi 21 or 22.
 ## Sign in
 
 1. In Immich, open *Account settings → API keys* and create a key. It needs
-   at least `asset.read`, `asset.view`, `album.read` and `user.read`, plus
-   `asset.download` if you want full resolution photos.
+   at least `asset.read`, `asset.view`, `album.read` and `user.read`. Add
+   `person.read` for people, `memory.read` for *On this day* and
+   `asset.download` for full resolution photos.
 2. Open Immich under *Pictures* in Kodi and choose *Sign in*, or open the
    add-on settings.
 3. Enter your server address and the API key.
 
 ## Slideshow
 
-Pick *Play slideshow* in any month or album, or from the context menu of a
-year, month or album. *Shuffle everything* plays random photos from the whole
+Pick *Play slideshow* at the top of any list of photos, or from the context
+menu of a year, month, person, place or album. *Shuffle everything* plays random photos from the whole
 library. During the slideshow:
 
 | Key | Does |
