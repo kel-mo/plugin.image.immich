@@ -191,7 +191,7 @@ def places(client, country=None):
     for c, state, city, asset_id in sorted(found, key=lambda x: x[2].lower()):
         if country is not None and c != country:
             continue
-        where = {'city': city, 'state': state, 'country': c}
+        where = {'city': city, 'country': c}       # state is often missing on some of a city's photos
         thumb = client.thumb_url(asset_id)
         folder(city, 'place', art={'thumb': thumb, 'icon': thumb, 'fanart': client.thumb_url(asset_id, 'preview')},
                label2=state, context=slideshow_menu(source='place', **where), name=city, **where)
@@ -296,7 +296,7 @@ def person(client, params):
 
 
 def place_filters(params):
-    return {k: params[k] for k in ('city', 'state', 'country') if params.get(k)}
+    return {k: params[k] for k in ('city', 'country') if params.get(k)}
 
 
 def place(client, params):
