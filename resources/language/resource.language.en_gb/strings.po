@@ -50,6 +50,10 @@ msgctxt "#30010"
 msgid "{0} items"
 msgstr ""
 
+msgctxt "#30011"
+msgid "Next page"
+msgstr ""
+
 # Settings 30100-30599
 
 msgctxt "#30100"
@@ -150,6 +154,18 @@ msgstr ""
 
 msgctxt "#30217"
 msgid "Loads the original photo instead of a 1440 pixel preview. Slower, especially on small devices. The API key needs the asset.download permission."
+msgstr ""
+
+msgctxt "#30300"
+msgid "Browsing"
+msgstr ""
+
+msgctxt "#30301"
+msgid "Photos per page"
+msgstr ""
+
+msgctxt "#30302"
+msgid "Months and albums with more photos than this get a Next page entry."
 msgstr ""
 
 msgctxt "#30500"

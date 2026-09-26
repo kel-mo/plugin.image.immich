@@ -140,6 +140,22 @@
         </setting>
       </group>
     </category>
+    <category id="browsing" label="30300" help="">
+      <group id="1">
+        <setting id="page_size" type="integer" label="30301" help="30302">
+          <level>1</level>
+          <default>500</default>
+          <constraints>
+            <minimum>100</minimum>
+            <step>100</step>
+            <maximum>1000</maximum>
+          </constraints>
+          <control type="slider" format="integer">
+            <popup>false</popup>
+          </control>
+        </setting>
+      </group>
+    </category>
     <category id="advanced" label="30500" help="">
       <group id="1">
         <setting id="debug" type="boolean" label="30501" help="">

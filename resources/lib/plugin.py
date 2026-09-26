@@ -108,8 +108,12 @@ def albums(client):
     end()
 
 
-def list_assets(client, assets, source, category=None):
-    """source: params that let the viewer fetch the same assets again."""
+def page_size():
+    return min(max(kodi.setting_int('page_size'), 100), 1000)   # Immich pages hold 1000 at most
+
+
+def list_assets(client, assets, source, category=None, more=None):
+    """source: params that let the viewer fetch the same assets again; more: next page params."""
     xbmcplugin.setContent(HANDLE, 'images')
     if category:
         xbmcplugin.setPluginCategory(HANDLE, category)
@@ -122,9 +126,30 @@ def list_assets(client, assets, source, category=None):
         li, url = items.asset_item(client, asset, path)
         li.addContextMenuItems([(kodi.L(30004), run_plugin('play', start=asset['id'], shuffle='0', **source))])
         xbmcplugin.addDirectoryItem(HANDLE, path or url, li, isFolder=False)
+    if more:
+        more = dict(more)
+        folder(kodi.L(30011), more.pop('action'), kodi.ICON, **more)
     xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_NONE)
     xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_DATE)
     end()
+
+
+def bucket(client, params):
+    size, offset = page_size(), int(params.get('offset') or 0)
+    found = client.timeline_bucket(params['bucket'])
+    more = None
+    if offset + size < len(found):
+        more = dict(params, offset=offset + size)
+    list_assets(client, found[offset:offset + size], {'source': 'bucket', 'bucket': params['bucket']},
+                params.get('name'), more)
+
+
+def album(client, params):
+    size, offset = page_size(), int(params.get('offset') or 0)
+    source = {'source': 'album', 'album_id': params['album_id'], 'order': params.get('order')}
+    found, has_more = client.search_page(offset // size + 1, size, params.get('order') or 'desc',
+                                         albumIds=[params['album_id']])
+    list_assets(client, found, source, params.get('name'), dict(params, offset=offset + size) if has_more else None)
 
 
 def source_assets(client, params):
@@ -196,15 +221,11 @@ def dispatch(action, params):
     elif action == 'timeline':
         timeline(ImmichClient(), params.get('year'))
     elif action == 'bucket':
-        client = ImmichClient()
-        list_assets(client, client.timeline_bucket(params['bucket']), {'source': 'bucket', 'bucket': params['bucket']},
-                    params.get('name'))
+        bucket(ImmichClient(), params)
     elif action == 'albums':
         albums(ImmichClient())
     elif action == 'album':
-        client = ImmichClient()
-        source = {'source': 'album', 'album_id': params['album_id'], 'order': params.get('order')}
-        list_assets(client, source_assets(client, source), source, params.get('name'))
+        album(ImmichClient(), params)
     elif action == 'play':
         play(ImmichClient(), params)
     else:
