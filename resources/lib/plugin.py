@@ -59,6 +59,7 @@ def root():
     client = ImmichClient()
     if has_people(client):
         folder(kodi.L(30012), 'people', kodi.ICON)
+    folder(kodi.L(30014), 'places', kodi.ICON)
     if has_albums(client):
         folder(kodi.L(30001), 'albums', kodi.ICON)
     action_item(kodi.L(30006), 'play', source='random', shuffle='1')
@@ -140,6 +141,31 @@ def people(client):
     end()
 
 
+def places(client, country=None):
+    """Countries, then their cities; a single country goes straight to its cities."""
+    found = []
+    for a in client.cities():
+        exif = a.get('exifInfo') or {}
+        if exif.get('city'):
+            found.append((exif.get('country') or '', exif.get('state') or '', exif['city'], a['id']))
+    countries = sorted({c for c, _, _, _ in found})
+    if country is None and len(countries) > 1:
+        for c in countries:
+            n = sum(1 for x in found if x[0] == c)
+            folder(c or kodi.L(30015), 'places', kodi.ICON, label2=kodi.L(30016, n), country=c, name=c)
+        return end()
+    if country is not None:
+        xbmcplugin.setPluginCategory(HANDLE, country or kodi.L(30015))
+    for c, state, city, asset_id in sorted(found, key=lambda x: x[2].lower()):
+        if country is not None and c != country:
+            continue
+        where = {'city': city, 'state': state, 'country': c}
+        thumb = client.thumb_url(asset_id)
+        folder(city, 'place', art={'thumb': thumb, 'icon': thumb, 'fanart': client.thumb_url(asset_id, 'preview')},
+               label2=state, context=slideshow_menu(source='place', **where), name=city, **where)
+    end()
+
+
 def page_size():
     return min(max(kodi.setting_int('page_size'), 100), 1000)   # Immich pages hold 1000 at most
 
@@ -192,6 +218,14 @@ def person(client, params):
     searched(client, params, {'source': 'person', 'person_id': params['person_id']}, personIds=[params['person_id']])
 
 
+def place_filters(params):
+    return {k: params[k] for k in ('city', 'state', 'country') if params.get(k)}
+
+
+def place(client, params):
+    searched(client, params, dict(place_filters(params), source='place'), **place_filters(params))
+
+
 def source_assets(client, params):
     kind = params.get('source')
     if kind == 'bucket':
@@ -204,6 +238,8 @@ def source_assets(client, params):
         return found
     if kind == 'album':
         return client.search(order=params.get('order') or 'desc', albumIds=[params['album_id']])
+    if kind == 'place':
+        return client.search(**place_filters(params))
     if kind == 'person':
         return client.search(personIds=[params['person_id']])
     if kind == 'random':
@@ -270,6 +306,10 @@ def dispatch(action, params):
         albums(ImmichClient())
     elif action == 'album':
         album(ImmichClient(), params)
+    elif action == 'places':
+        places(ImmichClient(), params.get('country'))
+    elif action == 'place':
+        place(ImmichClient(), params)
     elif action == 'people':
         people(ImmichClient())
     elif action == 'person':

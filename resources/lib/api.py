@@ -150,6 +150,10 @@ class ImmichClient:
                 return out
             page += 1
 
+    def cities(self):
+        """One asset per city, carrying the city, state and country."""
+        return self.get('/search/cities') or []
+
     def search_page(self, page=1, size=PAGE, order='desc', **filters):
         """One page of /search/metadata results: (assets, more pages follow)."""
         body = dict(filters, page=page, size=size, order=order, withExif=True)

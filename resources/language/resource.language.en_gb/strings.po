@@ -62,6 +62,18 @@ msgctxt "#30013"
 msgid "Unnamed"
 msgstr ""
 
+msgctxt "#30014"
+msgid "Places"
+msgstr ""
+
+msgctxt "#30015"
+msgid "Unknown country"
+msgstr ""
+
+msgctxt "#30016"
+msgid "{0} places"
+msgstr ""
+
 # Settings 30100-30599
 
 msgctxt "#30100"
