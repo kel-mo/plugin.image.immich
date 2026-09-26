@@ -218,6 +218,7 @@ def dispatch(action, params):
         root()
     elif action == 'settings':
         kodi.ADDON.openSettings()
+        xbmc.executebuiltin('Container.Refresh')   # Kodi doesn't refresh plugin lists itself
     elif action == 'signin':
         if signin.sign_in():
             xbmc.executebuiltin('Container.Refresh')
