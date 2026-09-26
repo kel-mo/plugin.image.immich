@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Render an Immich thumbhash (https://evanw.github.io/thumbhash/) as a blurred PNG backdrop."""
 import base64
+import os
 import struct
 import zlib
 from math import cos, pi
@@ -77,7 +78,9 @@ def write_png(path, width, height, rows):
     def chunk(kind, body):
         return struct.pack('>I', len(body)) + kind + body + struct.pack('>I', zlib.crc32(kind + body) & 0xffffffff)
     raw = b''.join(b'\0' + r for r in rows)
-    with open(path, 'wb') as f:
+    tmp = path + '.tmp'                         # a half-written file must not pass for done
+    with open(tmp, 'wb') as f:
         f.write(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0))
                 + chunk(b'IDAT', zlib.compress(raw, 6)) + chunk(b'IEND', b''))
+    os.replace(tmp, path)
     return path
