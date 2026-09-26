@@ -181,7 +181,9 @@ class ImmichClient:
         return '{}|x-api-key={}'.format(self.url(path, **params), quote(self.api_key or '', safe=''))
 
     def thumb_url(self, asset_id, size='thumbnail'):
-        return self.media_url('/assets/{}/thumbnail'.format(asset_id), size=size, edited='true')
+        # fullsize only falls back to the original when edits are not requested
+        return self.media_url('/assets/{}/thumbnail'.format(asset_id), size=size,
+                              edited=None if size == 'fullsize' else 'true')
 
     def video_url(self, asset_id):
         return self.media_url('/assets/{}/video/playback'.format(asset_id))
