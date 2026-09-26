@@ -18,7 +18,7 @@ PAGE = 1000
 
 # read-only scopes for keys we create; also listed on the sign-in page
 SCOPES = ['asset.read', 'asset.view', 'asset.download', 'album.read', 'person.read', 'memory.read',
-          'map.read', 'tag.read', 'partner.read', 'timeline.read', 'stack.read', 'user.read']
+          'map.read', 'tag.read', 'user.read']
 
 
 class ApiError(Exception):

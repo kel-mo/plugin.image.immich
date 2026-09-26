@@ -17,7 +17,7 @@ from .api import MIN_SERVER, SCOPES, ApiError, AuthError, ImmichClient, clean_ur
 
 TIMEOUT = 600
 ACTION_CANCEL = {9, 10, 13, 92}  # parent dir, previous menu, stop, nav back
-REQUIRED = {'asset.read', 'asset.view', 'album.read'}
+REQUIRED = {'asset.read', 'asset.view', 'album.read', 'user.read'}
 
 
 def is_signed_in():
@@ -72,13 +72,13 @@ def verify(server, api_key=None, email=None, password=None):
                 pass
     client.api_key = api_key.strip()
     try:
-        me = client.me()
-        perms = set((client.key_info() or {}).get('permissions') or [])
+        perms = set((client.key_info() or {}).get('permissions') or [])  # needs no scope
     except AuthError:
         raise ApiError(kodi.L(30624))
     missing = REQUIRED - perms if 'all' not in perms else set()
     if missing:
         raise ApiError(kodi.L(30625, ', '.join(sorted(missing))))
+    me = client.me()
     return server, client.api_key, me.get('name') or me.get('email') or ''
 
 
