@@ -56,10 +56,18 @@ def root():
         action_item(kodi.L(30003), 'settings')
         return end()
     folder(kodi.L(30000), 'timeline', kodi.ICON)
-    folder(kodi.L(30001), 'albums', kodi.ICON)
+    if has_albums(ImmichClient()):
+        folder(kodi.L(30001), 'albums', kodi.ICON)
     action_item(kodi.L(30006), 'play', source='random', shuffle='1')
     action_item(kodi.L(30003), 'settings')
     end()
+
+
+def has_albums(client):
+    try:
+        return any(a.get('assetCount') for a in client.albums())
+    except ApiError:
+        return True                             # let the listing report the error
 
 
 def month_name(month):
