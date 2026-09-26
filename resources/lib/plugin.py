@@ -165,7 +165,7 @@ def source_assets(client, params):
     if kind == 'album':
         return client.search(order=params.get('order') or 'desc', albumIds=[params['album_id']])
     if kind == 'random':
-        return client.random(500)
+        return client.random()
     return []
 
 
@@ -179,7 +179,8 @@ def play(client, params):
     if shuffle == '1' or (shuffle is None and kodi.setting_bool('shuffle')):
         random.shuffle(assets)
     start = next((i for i, a in enumerate(assets) if a['id'] == params.get('start')), 0)
-    viewer.play(client, assets, start, autoplay=params.get('autoplay') != '0')
+    more = client.random if params.get('source') == 'random' else None
+    viewer.play(client, assets, start, autoplay=params.get('autoplay') != '0', more=more)
 
 
 # --------------------------------------------------------------------- main

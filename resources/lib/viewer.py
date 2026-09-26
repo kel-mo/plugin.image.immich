@@ -29,6 +29,8 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.assets = kwargs['assets']
         self.index = kwargs.get('start', 0)
         self.playing = kwargs.get('autoplay', True)
+        self.more = kwargs.get('more')              # fetches another batch for endless shuffle
+        self.seen = {a['id'] for a in self.assets}
         self.actions = []
         self.closed = False
 
@@ -86,7 +88,22 @@ class Viewer(xbmcgui.WindowXMLDialog):
             fit.setImage(url, False)
         self.prepared[layer] = (index, full)
 
+    def refill(self):
+        try:
+            batch = self.more()
+        except ApiError as e:
+            kodi.log('shuffle refill failed: {}'.format(e), xbmc.LOGWARNING)
+            return
+        new = [a for a in batch if a['id'] not in self.seen]
+        if not new:                                 # everything shown once; allow repeats
+            self.seen.clear()
+            new = batch
+        self.seen.update(a['id'] for a in new)
+        self.assets += new
+
     def display(self, index, fade=None):
+        if self.more and index >= len(self.assets) - 3:
+            self.refill()
         self.index = index % len(self.assets)
         asset = self.assets[self.index]
         fade = fade or self.fade
@@ -124,7 +141,8 @@ class Viewer(xbmcgui.WindowXMLDialog):
     def caption(self, asset):
         self.setProperty('immich.date', items.when(asset['taken']))
         self.setProperty('immich.place', items.place(asset))
-        self.setProperty('immich.position', '{} / {}'.format(self.index + 1, len(self.assets)))
+        total = '' if self.more else ' / {}'.format(len(self.assets))   # endless shuffle has no total
+        self.setProperty('immich.position', '{}{}'.format(self.index + 1, total))
 
     # ---------------------------------------------------------------- video
     def play_video(self):
@@ -203,7 +221,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.stop_video()
 
 
-def play(client, assets, start=0, autoplay=True):
+def play(client, assets, start=0, autoplay=True, more=None):
     if not kodi.setting_bool('videos'):
         current = assets[start]['id'] if 0 <= start < len(assets) else None
         assets = [a for a in assets if a['image']]
@@ -212,7 +230,7 @@ def play(client, assets, start=0, autoplay=True):
         kodi.notify(kodi.L(30701))
         return
     window = Viewer('script-immich-viewer.xml', kodi.ADDON_PATH, 'default', '1080i',
-                    client=client, assets=assets, start=start, autoplay=autoplay)
+                    client=client, assets=assets, start=start, autoplay=autoplay, more=more)
     xbmc.executebuiltin('InhibitScreensaver(true)')
     window.show()
     try:
