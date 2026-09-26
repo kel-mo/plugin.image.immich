@@ -66,6 +66,8 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.player = xbmc.Player()
         self.video = None
         self.next_at = None
+        self.kb = None
+        self.left = 0
 
     # --------------------------------------------------------------- slides
     def free_layer(self):
@@ -116,8 +118,9 @@ class Viewer(xbmcgui.WindowXMLDialog):
             self.prepare(self.index, layer)
         group, back, cover, fit = self.layers[layer]
         main = cover if self.prepared[layer][1] else fit
+        self.kb = None
         if self.kenburns and self.playing and asset['image']:
-            main.setAnimations([self.pan_zoom(fade)])
+            self.pan_zoom(main, fade)
         else:
             main.setAnimations([])
         group.setAnimations([anim('fade', start=0, end=100, time=fade, tween='sine', easing='inout')])
@@ -131,12 +134,34 @@ class Viewer(xbmcgui.WindowXMLDialog):
             self.video = {'id': asset['id'], 'at': self.shown_at + fade / 1000.0 + 0.3, 'started': False}
             self.next_at = None
 
-    def pan_zoom(self, fade):
+    def pan_zoom(self, main, fade):
         """Slow zoom in or out around a random focal point, spanning the fades on both ends."""
-        cx, cy = random.randint(480, 1440), random.randint(270, 810)
         start, end = (100, self.zoom) if random.random() < 0.6 else (self.zoom, 100)
-        return anim('zoom', start=start, end=end, center='{},{}'.format(cx, cy),
-                    time=int((self.stay * 1000 + 2 * fade) * 1.1), tween='linear')
+        self.kb = {'ctrl': main, 'start': start, 'end': end, 't0': time.time(),
+                   'center': '{},{}'.format(random.randint(480, 1440), random.randint(270, 810)),
+                   'time': int((self.stay * 1000 + 2 * fade) * 1.1)}
+        self.zoom_to(self.kb['start'], self.kb['time'])
+
+    def zoom_to(self, start, ms):
+        kb = self.kb
+        kb['ctrl'].setAnimations([anim('zoom', start=round(start, 3), end=kb['end'], center=kb['center'],
+                                       time=int(ms), tween='linear')])
+
+    def freeze(self):
+        """Kodi can't pause an animation, so hold it at where the linear zoom has got to."""
+        kb = self.kb
+        if not kb:
+            return
+        done = min((time.time() - kb['t0']) * 1000 / max(kb['time'], 1), 1.0)
+        kb['start'] += (kb['end'] - kb['start']) * done
+        kb['time'] *= 1 - done
+        kb['ctrl'].setAnimations([anim('zoom', start=round(kb['start'], 3), end=round(kb['start'], 3),
+                                       center=kb['center'], time=0)])
+
+    def thaw(self):
+        if self.kb and self.kb['time'] > 0:
+            self.kb['t0'] = time.time()
+            self.zoom_to(self.kb['start'], self.kb['time'])
 
     def caption(self, asset):
         self.setProperty('immich.date', items.when(asset['taken']))
@@ -185,9 +210,15 @@ class Viewer(xbmcgui.WindowXMLDialog):
         elif action in PREV:
             self.display(self.index - 1, 500)
         elif action in PAUSE and not self.video:
+            now = time.time()
             self.playing = not self.playing
             self.setProperty('immich.status', '' if self.playing else kodi.L(30700))
-            self.next_at = time.time() + self.stay
+            if self.playing:
+                self.thaw()
+                self.next_at = now + max(self.left, 1.0)
+            else:
+                self.freeze()
+                self.left = (self.next_at - now) if self.next_at else self.stay
         elif action in INFO:
             on = self.getProperty('immich.captions') != 'true'
             self.setProperty('immich.captions', 'true' if on else 'false')
