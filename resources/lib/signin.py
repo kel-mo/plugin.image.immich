@@ -16,7 +16,7 @@ from . import kodi, qr
 from .api import MIN_SERVER, SCOPES, ApiError, AuthError, ImmichClient, clean_url
 
 TIMEOUT = 600
-ACTION_CANCEL = {9, 10, 92, 216}  # parent dir, previous menu, nav back, stop
+ACTION_CANCEL = {9, 10, 13, 92}  # parent dir, previous menu, stop, nav back
 REQUIRED = {'asset.read', 'asset.view', 'album.read'}
 
 
@@ -127,6 +127,8 @@ class SignInServer(HTTPServer):
 
 
 class Handler(BaseHTTPRequestHandler):
+    timeout = 5                                 # idle or slow clients must not stall the dialog
+
     def log_message(self, fmt, *args):
         kodi.debug('sign-in page: ' + fmt % args)
 
@@ -152,7 +154,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._allowed():
             return
-        length = min(int(self.headers.get('Content-Length') or 0), 16384)
+        try:
+            length = int(self.headers.get('Content-Length') or 0)
+        except ValueError:
+            length = -1
+        if not 0 <= length <= 16384:
+            self._send(400, 'Bad request')
+            return
         form = {k: v[0].strip() for k, v in parse_qs(self.rfile.read(length).decode('utf-8', 'replace')).items()}
         server = form.get('server', '')
         try:
@@ -206,9 +214,9 @@ def sign_in():
     deadline = time.time() + TIMEOUT
     try:
         while not server.result and not dialog.cancelled and time.time() < deadline:
-            if monitor.abortRequested():
-                break
             server.handle_request()
+            if monitor.waitForAbort(0.05):      # also runs onAction callbacks
+                break
     finally:
         server.server_close()
         dialog.close()
