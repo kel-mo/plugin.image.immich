@@ -41,7 +41,10 @@ def clean_url(url):
     if url.endswith('/api'):
         url = url[:-4]
     if url and not url.startswith(('http://', 'https://')):
-        url = 'https://' + url
+        host = url.split('/')[0]
+        # a bare IP or host:port is usually Immich on the LAN, served over plain http
+        plain = ':' in host or host.replace('.', '').isdigit()
+        url = ('http://' if plain else 'https://') + url
     return url
 
 
