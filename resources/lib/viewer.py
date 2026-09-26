@@ -45,7 +45,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.stay = max(kodi.setting_int('slide_time'), 2)
         self.fade = max(int(kodi.setting_number('fade_time') * 1000), 200)
         self.kenburns = kodi.setting_bool('kenburns')
-        self.zoom = min(max(kodi.setting_int('zoom'), 100), 160)
+        self.zoom = min(max(kodi.setting_int('zoom'), 100), 125)
         self.size = 'preview'
         if kodi.setting_bool('hires'):
             try:

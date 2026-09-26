@@ -92,11 +92,11 @@
         </setting>
         <setting id="zoom" type="integer" label="30207" help="">
           <level>1</level>
-          <default>125</default>
+          <default>115</default>
           <constraints>
             <minimum>105</minimum>
             <step>5</step>
-            <maximum>160</maximum>
+            <maximum>125</maximum>
           </constraints>
           <dependencies>
             <dependency type="enable" setting="kenburns">true</dependency>
