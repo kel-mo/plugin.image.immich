@@ -2,11 +2,14 @@
 """Full-screen viewer: Ken Burns pan and zoom, crossfades, captions and inline video."""
 import os
 import random
+import re
 import shutil
 import time
 
 import xbmc
+import xbmcaddon
 import xbmcgui
+import xbmcvfs
 
 from . import items, kodi, thumbhash
 from .api import ApiError, ImmichClient
@@ -20,8 +23,29 @@ INFO = {11}
 UNDECODABLE = {'image/avif'}             # originals LibreELEC's Kodi can't show over http
 
 
+_slowdown = None
+
+
+def skin_slowdown():
+    """Kodi multiplies every animation time by the skin's effectslowdown (0.22 in Confluence ZEITGEIST)."""
+    global _slowdown
+    if _slowdown is None:
+        _slowdown = 1.0
+        try:
+            path = xbmcvfs.translatePath(xbmcaddon.Addon(xbmc.getSkinDir()).getAddonInfo('path'))
+            with open(os.path.join(path, 'addon.xml'), encoding='utf-8') as f:
+                found = re.search(r'effectslowdown="([0-9.]+)"', f.read())
+            if found and float(found.group(1)) > 0:
+                _slowdown = float(found.group(1))
+        except (RuntimeError, OSError, ValueError) as e:
+            kodi.log('skin effectslowdown unknown: {}'.format(e), xbmc.LOGWARNING)
+    return _slowdown
+
+
 def anim(effect, **attrs):
     attrs.setdefault('condition', 'true')
+    if attrs.get('time'):
+        attrs['time'] = int(attrs['time'] / skin_slowdown())   # real milliseconds on any skin
     return ('conditional', 'effect={} {}'.format(effect, ' '.join('{}={}'.format(k, v) for k, v in attrs.items())))
 
 

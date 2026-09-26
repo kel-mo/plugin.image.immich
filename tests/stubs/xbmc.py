@@ -16,3 +16,4 @@ class Player:
     def isPlayingVideo(self): return False
     def play(self, *a, **k): pass
     def stop(self): pass
+def getSkinDir(): return 'skin.estuary'
