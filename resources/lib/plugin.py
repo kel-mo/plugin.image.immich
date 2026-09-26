@@ -8,7 +8,8 @@ import xbmc
 import xbmcgui
 import xbmcplugin
 
-from . import kodi, signin
+from . import items, kodi, signin
+from .api import ApiError, AuthError, ImmichClient
 
 BASE = 'plugin://{}/'.format(kodi.ADDON_ID)
 HANDLE = -1
@@ -27,8 +28,8 @@ def end(succeeded=True, cache_to_disc=False):
     xbmcplugin.endOfDirectory(HANDLE, succeeded, cacheToDisc=cache_to_disc)
 
 
-def folder(label, action, icon=None, art=None, context=None, **params):
-    li = xbmcgui.ListItem(label, offscreen=True)
+def folder(label, action, icon=None, art=None, context=None, label2='', **params):
+    li = xbmcgui.ListItem(label, label2, offscreen=True)
     art = dict(art or {})
     if icon:
         art.setdefault('icon', icon)
@@ -52,7 +53,41 @@ def root():
         action_item(kodi.L(30002), 'signin')
         action_item(kodi.L(30003), 'settings')
         return end()
+    folder(kodi.L(30000), 'timeline', kodi.ICON)
     action_item(kodi.L(30003), 'settings')
+    end()
+
+
+def month_name(month):
+    return xbmc.getLocalizedString(20 + month)                  # Kodi strings 21-32
+
+
+def timeline(client, year=None):
+    buckets = client.timeline_buckets()
+    if not year:
+        years = {}
+        for b in buckets:
+            years[b['timeBucket'][:4]] = years.get(b['timeBucket'][:4], 0) + b['count']
+        for y in sorted(years, reverse=True):
+            folder(y, 'timeline', kodi.ICON, label2=kodi.L(30010, years[y]), year=y)
+    else:
+        xbmcplugin.setPluginCategory(HANDLE, year)
+        for b in buckets:
+            if b['timeBucket'].startswith(year):
+                name = '{} {}'.format(month_name(int(b['timeBucket'][5:7])), year)
+                folder(name, 'bucket', kodi.ICON, label2=kodi.L(30010, b['count']), bucket=b['timeBucket'], name=name)
+    end()
+
+
+def list_assets(client, assets, category=None):
+    xbmcplugin.setContent(HANDLE, 'images')
+    if category:
+        xbmcplugin.setPluginCategory(HANDLE, category)
+    for asset in assets:
+        li, url = items.asset_item(client, asset)
+        xbmcplugin.addDirectoryItem(HANDLE, url, li, isFolder=False)
+    xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_NONE)
+    xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_DATE)
     end()
 
 
@@ -65,6 +100,15 @@ def run(argv):
     kodi.debug('action={} params={}'.format(action, json.dumps(params)))
     try:
         dispatch(action, params)
+    except AuthError as e:
+        kodi.error(str(e))
+        if HANDLE >= 0:
+            end(False)
+    except ApiError as e:
+        kodi.log('request failed: {}'.format(e), xbmc.LOGERROR)
+        kodi.error(str(e))
+        if HANDLE >= 0:
+            end(False)
     except Exception as e:  # keep Kodi from waiting on a listing that never ends
         kodi.log(traceback.format_exc(), xbmc.LOGERROR)
         kodi.error(str(e))
@@ -86,6 +130,13 @@ def dispatch(action, params):
     elif action == 'signout':
         signin.sign_out()
         xbmc.executebuiltin('Container.Refresh')
+    elif not signin.is_signed_in():
+        kodi.error(kodi.L(30615))
+        end(False)
+    elif action == 'timeline':
+        timeline(ImmichClient(), params.get('year'))
+    elif action == 'bucket':
+        list_assets(ImmichClient(), ImmichClient().timeline_bucket(params['bucket']), params.get('name'))
     else:
         kodi.log('unknown action {}'.format(action), xbmc.LOGWARNING)
         end(False)

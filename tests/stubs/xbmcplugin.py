@@ -7,3 +7,4 @@ def addSortMethod(h, m): pass
 def setContent(h, c): META['content'] = c
 def setPluginCategory(h, c): META['category'] = c
 def setResolvedUrl(h, ok, li): META['resolved'] = (ok, li)
+SORT_METHOD_DATE = 2

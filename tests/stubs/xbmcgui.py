@@ -12,7 +12,7 @@ class Dialog:
 class _Tag:
     def __getattr__(self, n): return lambda *a, **k: None
 class ListItem:
-    def __init__(self, label='', label2='', path='', offscreen=False): self.label = label; self.art = {}; self.props = {}; self.ctx = []; self.path = path
+    def __init__(self, label='', label2='', path='', offscreen=False): self.label = label; self.label2 = label2; self.mime = ''; self.art = {}; self.props = {}; self.ctx = []; self.path = path
     def setArt(self, a): self.art.update(a)
     def setLabel(self, l): self.label = l
     def setLabel2(self, l): self.label2 = l

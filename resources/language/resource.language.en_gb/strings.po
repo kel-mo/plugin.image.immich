@@ -18,12 +18,20 @@ msgstr ""
 
 # Menu items 30000-30099
 
+msgctxt "#30000"
+msgid "Timeline"
+msgstr ""
+
 msgctxt "#30002"
 msgid "Sign in"
 msgstr ""
 
 msgctxt "#30003"
 msgid "Settings"
+msgstr ""
+
+msgctxt "#30010"
+msgid "{0} items"
 msgstr ""
 
 # Settings 30100-30599
