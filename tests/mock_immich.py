@@ -37,6 +37,31 @@ BY_ID = {a['id']: a for a in ASSETS}
 ALBUMS = [{'id': 'album-1', 'albumName': 'Holidays', 'members': ASSETS[0:40]},
           {'id': 'album-2', 'albumName': 'Garden', 'members': ASSETS[40:52]},
           {'id': 'album-3', 'albumName': 'Empty', 'members': []}]
+PEOPLE = [{'id': 'person-{}'.format(i), 'name': name, 'isHidden': False, 'isFavorite': False,
+           'members': [a for a in ASSETS if a['n'] % 5 == i]}
+          for i, name in enumerate(['Alex', '', 'Sam', '', ''])]
+FAVOURITES = [a for a in ASSETS if a['n'] % 5 == 0]
+
+
+def filtered(body):
+    items = ASSETS
+    if body.get('albumIds'):
+        items = next((al['members'] for al in ALBUMS if al['id'] == body['albumIds'][0]), [])
+    if body.get('personIds'):
+        items = next((p['members'] for p in PEOPLE if p['id'] == body['personIds'][0]), [])
+    if body.get('city'):
+        items = [a for a in items if a['city'] == body['city']]
+    if body.get('isFavorite'):
+        items = [a for a in items if a in FAVOURITES]
+    return list(reversed(items)) if body.get('order') == 'asc' else items
+
+
+def paged(items, body):
+    page, size = int(body.get('page') or 1), int(body.get('size') or 250)
+    chunk = items[(page - 1) * size:page * size]
+    nxt = str(page + 1) if page * size < len(items) else None
+    return {'assets': {'items': [asset_dto(a) for a in chunk], 'nextPage': nxt, 'count': len(chunk),
+                       'total': len(items)}}
 
 
 def bucket_key(a):
@@ -58,7 +83,9 @@ def asset_dto(a):
     return {'id': a['id'], 'type': 'VIDEO' if a['video'] else 'IMAGE',
             'localDateTime': a['taken'].strftime('%Y-%m-%dT%H:%M:%S.000Z'), 'duration': 5000 if a['video'] else None,
             'width': w, 'height': int(w / a['ratio']), 'isFavorite': a['n'] % 5 == 0,
-            'exifInfo': {'city': a['city'], 'country': a['country']}}
+            'exifInfo': {'city': a['city'], 'country': a['country'],
+                         'state': {'Perth': 'Western Australia', 'Hobart': 'Tasmania'}.get(a['city'])},
+            'thumbhash': None}
 
 
 def png(a, long_side):
@@ -129,7 +156,25 @@ class Handler(BaseHTTPRequestHandler):
                                     'startDate': al['members'][-1]['taken'].isoformat() if al['members'] else None,
                                     'endDate': al['members'][0]['taken'].isoformat() if al['members'] else None}
                                    for al in ALBUMS])
+        if p == '/api/people':
+            return self.send(200, {'people': [{k: v for k, v in pe.items() if k != 'members'} for pe in PEOPLE],
+                                   'total': len(PEOPLE), 'hidden': 0, 'hasNextPage': False})
+        if p == '/api/search/cities':
+            seen = {}
+            for a in ASSETS:
+                if a['city'] and a['city'] not in seen:
+                    seen[a['city']] = asset_dto(a)
+            return self.send(200, list(seen.values()))
+        if p == '/api/memories':
+            return self.send(200, [{'id': 'm{}'.format(y), 'type': 'on_this_day', 'data': {'year': y},
+                                    'memoryAt': '{}-09-26T00:00:00.000Z'.format(y),
+                                    'assets': [asset_dto(a) for a in ASSETS[k:k + 3]]}
+                                   for k, y in ((3, 2025), (60, 2024))])
         parts = p.split('/')
+        if len(parts) == 5 and parts[2] == 'people' and parts[4] == 'thumbnail':
+            pe = next((x for x in PEOPLE if x['id'] == parts[3]), None)
+            if pe:
+                return self.send(200, png(pe['members'][0], 250), 'image/png')
         if len(parts) >= 5 and parts[2] == 'assets' and parts[3] in BY_ID:
             a = BY_ID[parts[3]]
             if parts[4] == 'thumbnail':
@@ -161,16 +206,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, [asset_dto(a) for a in random.sample(ASSETS, min(int(body.get('size') or 250),
                                                                                   len(ASSETS)))])
         if u.path == '/api/search/metadata':
-            items = ASSETS
-            if body.get('albumIds'):
-                items = next((al['members'] for al in ALBUMS if al['id'] == body['albumIds'][0]), [])
-            if body.get('order') == 'asc':
-                items = list(reversed(items))
-            page, size = int(body.get('page') or 1), int(body.get('size') or 250)
-            chunk = items[(page - 1) * size:page * size]
-            nxt = str(page + 1) if page * size < len(items) else None
-            return self.send(200, {'assets': {'items': [asset_dto(a) for a in chunk], 'nextPage': nxt,
-                                              'count': len(chunk), 'total': len(items)}})
+            return self.send(200, paged(filtered(body), body))
+        if u.path == '/api/search/smart':
+            return self.send(200, paged([a for a in ASSETS if not a['video']], body))
         return self.send(404, {'message': 'Not found'})
 
 
