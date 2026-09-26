@@ -2,7 +2,6 @@
 <addon id="plugin.image.immich" name="Immich" version="0.1.0" provider-name="kel-mo">
   <requires>
     <import addon="xbmc.python" version="3.0.1"/>
-    <import addon="script.module.pyqrcode" version="1.2.1"/>
   </requires>
   <extension point="xbmc.python.pluginsource" library="default.py">
     <provides>image</provides>

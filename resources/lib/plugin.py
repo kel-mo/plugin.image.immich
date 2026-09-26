@@ -51,7 +51,7 @@ def action_item(label, action, **params):
 
 # ------------------------------------------------------------------ listings
 def root():
-    if not signin.is_signed_in():
+    if not signin.is_signed_in() or not signin.check():
         action_item(kodi.L(30002), 'signin')
         action_item(kodi.L(30003), 'settings')
         return end()
@@ -186,9 +186,6 @@ def dispatch(action, params):
         kodi.ADDON.openSettings()
     elif action == 'signin':
         if signin.sign_in():
-            xbmc.executebuiltin('Container.Refresh')
-    elif action == 'enter_key':
-        if signin.enter_key():
             xbmc.executebuiltin('Container.Refresh')
     elif action == 'signout':
         signin.sign_out()

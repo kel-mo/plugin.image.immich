@@ -64,20 +64,12 @@ msgctxt "#30102"
 msgid "For example https://photos.example.com"
 msgstr ""
 
-msgctxt "#30103"
-msgid "Sign in with your phone"
-msgstr ""
-
-msgctxt "#30104"
-msgid "Shows a QR code. Open it on a phone on the same network, then paste an API key or sign in with email and password."
-msgstr ""
-
 msgctxt "#30105"
-msgid "Enter an API key"
+msgid "API key"
 msgstr ""
 
 msgctxt "#30106"
-msgid "Type the server address and an API key with the remote."
+msgid "Make one in Immich under Account settings > API keys. It needs at least the asset.read, asset.view, album.read and user.read permissions."
 msgstr ""
 
 msgctxt "#30107"
@@ -170,40 +162,16 @@ msgstr ""
 
 # Messages 30600-30699
 
-msgctxt "#30600"
-msgid "Sign in to Immich"
-msgstr ""
-
 msgctxt "#30601"
 msgid "Set the Immich server address first"
-msgstr ""
-
-msgctxt "#30602"
-msgid "Scan the code with your phone, or open this address:"
-msgstr ""
-
-msgctxt "#30603"
-msgid "Waiting for your phone…"
 msgstr ""
 
 msgctxt "#30604"
 msgid "Signed in as {0}"
 msgstr ""
 
-msgctxt "#30607"
-msgid "Your phone must be on the same network as Kodi. Then paste an API key, or sign in with your Immich email and password. Page does not open? A firewall may block port 8765; use Enter an API key in the settings instead."
-msgstr ""
-
-msgctxt "#30608"
-msgid "Press Back to cancel"
-msgstr ""
-
 msgctxt "#30609"
 msgid "Signed out"
-msgstr ""
-
-msgctxt "#30610"
-msgid "Could not start the sign-in page: {0}"
 msgstr ""
 
 msgctxt "#30614"
@@ -218,28 +186,12 @@ msgctxt "#30621"
 msgid "Immich {0} is too old. Version 2.0 or newer is needed."
 msgstr ""
 
-msgctxt "#30622"
-msgid "Paste an API key, or enter your email and password"
-msgstr ""
-
-msgctxt "#30623"
-msgid "Wrong email or password"
-msgstr ""
-
 msgctxt "#30624"
 msgid "Immich did not accept this API key"
 msgstr ""
 
 msgctxt "#30625"
 msgid "The API key is missing these permissions: {0}"
-msgstr ""
-
-msgctxt "#30626"
-msgid "For {0}"
-msgstr ""
-
-msgctxt "#30627"
-msgid "You can close this page now."
 msgstr ""
 
 # Viewer 30700-30799

@@ -21,14 +21,11 @@ Needs Immich 2.0 or newer, and Kodi 21 or 22.
 
 ## Sign in
 
-Open Immich under *Pictures* and choose *Sign in*. Scan the QR code with a
-phone on the same network, enter your server address, then either:
-
-- paste an API key made in Immich under *Account settings → API keys*, or
-- sign in with your email and password; Kodi then makes its own read-only
-  API key and does not keep the password.
-
-No phone? *Settings → Enter an API key* lets you type one with the remote.
+1. In Immich, open *Account settings → API keys* and create a key. It needs
+   at least `asset.read`, `asset.view`, `album.read` and `user.read`.
+2. Open Immich under *Pictures* in Kodi and choose *Sign in*, or open the
+   add-on settings.
+3. Enter your server address and the API key.
 
 ## Slideshow
 

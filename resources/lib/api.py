@@ -16,11 +16,6 @@ MIN_SERVER = (2, 0, 0)
 TIMEOUT = 30
 PAGE = 1000
 
-# read-only scopes for keys we create; also listed on the sign-in page
-SCOPES = ['asset.read', 'asset.view', 'asset.download', 'album.read', 'person.read', 'memory.read',
-          'map.read', 'tag.read', 'user.read']
-
-
 class ApiError(Exception):
     def __init__(self, message, status=None, detail=None):
         super().__init__(message)
@@ -72,19 +67,16 @@ class ImmichClient:
         query = urlencode(clean, doseq=True)
         return '{}/api{}{}'.format(self.base_url, path, '?' + query if query else '')
 
-    def headers(self, token=None, extra=None):
+    def headers(self, extra=None):
         h = {'Accept': 'application/json',
              'User-Agent': '{}/{}'.format(kodi.ADDON_ID, kodi.ADDON_VERSION)}
-        if token:
-            h['Authorization'] = 'Bearer ' + token
-        elif self.api_key:
+        if self.api_key:
             h['x-api-key'] = self.api_key
         if extra:
             h.update(extra)
         return h
 
-    def request(self, method, path, params=None, body=None, token=None, timeout=None):
-        """token: a session token that replaces the API key (sign-in only)."""
+    def request(self, method, path, params=None, body=None, timeout=None):
         if not self.base_url:
             raise ApiError(kodi.L(30601))
         if aborting():
@@ -95,7 +87,7 @@ class ImmichClient:
         if body is not None:
             data = json.dumps(body).encode('utf-8')
             extra['Content-Type'] = 'application/json'
-        req = Request(url, data=data, headers=self.headers(token, extra), method=method)
+        req = Request(url, data=data, headers=self.headers(extra), method=method)
         kodi.debug('{} {}'.format(method, url))
         try:
             resp = urlopen(req, timeout=timeout or self.timeout, context=self.ssl_ctx)
@@ -136,16 +128,6 @@ class ImmichClient:
 
     def key_info(self):
         return self.get('/api-keys/me')
-
-    # ---------------------------------------------------------------- sign-in
-    def login(self, email, password):
-        return self.request('POST', '/auth/login', body={'email': email, 'password': password})
-
-    def create_key(self, token, name):
-        return self.request('POST', '/api-keys', body={'name': name, 'permissions': SCOPES}, token=token)
-
-    def logout(self, token):
-        return self.request('POST', '/auth/logout', body={}, token=token)
 
     # ---------------------------------------------------------------- library
     def timeline_buckets(self, **filters):
