@@ -203,9 +203,11 @@ def play(client, assets, start=0, autoplay=True):
         return
     window = Viewer('script-immich-viewer.xml', kodi.ADDON_PATH, 'default', '1080i',
                     client=client, assets=assets, start=start, autoplay=autoplay)
+    xbmc.executebuiltin('InhibitScreensaver(true)')
     window.show()
     try:
         window.run()
     finally:
         window.close()
         del window
+        xbmc.executebuiltin('InhibitScreensaver(false)')
