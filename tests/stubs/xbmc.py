@@ -9,3 +9,4 @@ class Monitor:
     def abortRequested(self): return False
     def waitForAbort(self, t=0): return False
 class Player: pass
+def getInfoLabel(s): return 'Test Kodi'

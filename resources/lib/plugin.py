@@ -8,7 +8,7 @@ import xbmc
 import xbmcgui
 import xbmcplugin
 
-from . import kodi
+from . import kodi, signin
 
 BASE = 'plugin://{}/'.format(kodi.ADDON_ID)
 HANDLE = -1
@@ -48,6 +48,10 @@ def action_item(label, action, **params):
 
 # ------------------------------------------------------------------ listings
 def root():
+    if not signin.is_signed_in():
+        action_item(kodi.L(30002), 'signin')
+        action_item(kodi.L(30003), 'settings')
+        return end()
     action_item(kodi.L(30003), 'settings')
     end()
 
@@ -73,6 +77,15 @@ def dispatch(action, params):
         root()
     elif action == 'settings':
         kodi.ADDON.openSettings()
+    elif action == 'signin':
+        if signin.sign_in():
+            xbmc.executebuiltin('Container.Refresh')
+    elif action == 'enter_key':
+        if signin.enter_key():
+            xbmc.executebuiltin('Container.Refresh')
+    elif action == 'signout':
+        signin.sign_out()
+        xbmc.executebuiltin('Container.Refresh')
     else:
         kodi.log('unknown action {}'.format(action), xbmc.LOGWARNING)
         end(False)

@@ -32,6 +32,7 @@ class WindowDialog:
     def close(self): pass
 class ControlImage:
     def __init__(self, *a, **k): pass
+    def __getattr__(self, n): return lambda *a, **k: None
 class ControlLabel(ControlImage): pass
 class ControlTextBox(ControlImage): pass
 class ControlButton(ControlImage): pass

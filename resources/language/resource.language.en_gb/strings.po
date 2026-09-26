@@ -18,11 +18,51 @@ msgstr ""
 
 # Menu items 30000-30099
 
+msgctxt "#30002"
+msgid "Sign in"
+msgstr ""
+
 msgctxt "#30003"
 msgid "Settings"
 msgstr ""
 
-# Settings 30500-30599
+# Settings 30100-30599
+
+msgctxt "#30100"
+msgid "Account"
+msgstr ""
+
+msgctxt "#30101"
+msgid "Immich server address"
+msgstr ""
+
+msgctxt "#30102"
+msgid "For example https://photos.example.com"
+msgstr ""
+
+msgctxt "#30103"
+msgid "Sign in with your phone"
+msgstr ""
+
+msgctxt "#30104"
+msgid "Shows a QR code. Open it on a phone on the same network, then paste an API key or sign in with email and password."
+msgstr ""
+
+msgctxt "#30105"
+msgid "Enter an API key"
+msgstr ""
+
+msgctxt "#30106"
+msgid "Type the server address and an API key with the remote."
+msgstr ""
+
+msgctxt "#30107"
+msgid "Sign out"
+msgstr ""
+
+msgctxt "#30108"
+msgid "Signed in as"
+msgstr ""
 
 msgctxt "#30500"
 msgid "Advanced"
@@ -34,8 +74,40 @@ msgstr ""
 
 # Messages 30600-30699
 
+msgctxt "#30600"
+msgid "Sign in to Immich"
+msgstr ""
+
 msgctxt "#30601"
 msgid "Set the Immich server address first"
+msgstr ""
+
+msgctxt "#30602"
+msgid "Scan the code with your phone, or open this address:"
+msgstr ""
+
+msgctxt "#30603"
+msgid "Waiting for your phone…"
+msgstr ""
+
+msgctxt "#30604"
+msgid "Signed in as {0}"
+msgstr ""
+
+msgctxt "#30607"
+msgid "Your phone must be on the same network as Kodi. Then paste an API key, or sign in with your Immich email and password."
+msgstr ""
+
+msgctxt "#30608"
+msgid "Press Back to cancel"
+msgstr ""
+
+msgctxt "#30609"
+msgid "Signed out"
+msgstr ""
+
+msgctxt "#30610"
+msgid "Could not start the sign-in page: {0}"
 msgstr ""
 
 msgctxt "#30614"
@@ -44,4 +116,32 @@ msgstr ""
 
 msgctxt "#30615"
 msgid "Immich did not accept the sign-in. Sign in again."
+msgstr ""
+
+msgctxt "#30621"
+msgid "Immich {0} is too old. Version 2.0 or newer is needed."
+msgstr ""
+
+msgctxt "#30622"
+msgid "Paste an API key, or enter your email and password"
+msgstr ""
+
+msgctxt "#30623"
+msgid "Wrong email or password"
+msgstr ""
+
+msgctxt "#30624"
+msgid "Immich did not accept this API key"
+msgstr ""
+
+msgctxt "#30625"
+msgid "The API key is missing these permissions: {0}"
+msgstr ""
+
+msgctxt "#30626"
+msgid "For {0}"
+msgstr ""
+
+msgctxt "#30627"
+msgid "You can close this page now."
 msgstr ""
