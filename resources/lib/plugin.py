@@ -17,6 +17,7 @@ BASE = 'plugin://{}/'.format(kodi.ADDON_ID)
 HANDLE = -1
 SEARCH_PAGE = 100                        # matches get weaker further down
 RECENT = 10
+TIMELINE = 'timeline'                    # leaves out archived photos and live-photo clips
 NO_COUNTRY = '-'                         # empty values drop out of plugin URLs
 
 
@@ -98,7 +99,7 @@ def today_memories(client):
 
 def has_favourites(client):
     try:
-        return bool(client.search_page(1, 1, isFavorite=True)[0])
+        return bool(client.search_page(1, 1, isFavorite=True, visibility=TIMELINE)[0])
     except ApiError:
         return True
 
@@ -292,7 +293,8 @@ def album(client, params):
 
 
 def person(client, params):
-    searched(client, params, {'source': 'person', 'person_id': params['person_id']}, personIds=[params['person_id']])
+    searched(client, params, {'source': 'person', 'person_id': params['person_id']}, personIds=[params['person_id']],
+             visibility=TIMELINE)
 
 
 def place_filters(params):
@@ -300,7 +302,7 @@ def place_filters(params):
 
 
 def place(client, params):
-    searched(client, params, dict(place_filters(params), source='place'), **place_filters(params))
+    searched(client, params, dict(place_filters(params), source='place'), visibility=TIMELINE, **place_filters(params))
 
 
 def source_assets(client, params):
@@ -321,11 +323,11 @@ def source_assets(client, params):
     if kind == 'search':
         return [a for page in (1, 2) for a in client.smart_page(params['query'], page, SEARCH_PAGE)[0]]
     if kind == 'favourites':
-        return client.search(isFavorite=True)
+        return client.search(isFavorite=True, visibility=TIMELINE)
     if kind == 'place':
-        return client.search(**place_filters(params))
+        return client.search(visibility=TIMELINE, **place_filters(params))
     if kind == 'person':
-        return client.search(personIds=[params['person_id']])
+        return client.search(personIds=[params['person_id']], visibility=TIMELINE)
     if kind == 'random':
         return client.random()
     return []
@@ -403,7 +405,8 @@ def dispatch(action, params):
     elif action == 'search':
         search(ImmichClient(), params)
     elif action == 'favourites':
-        searched(ImmichClient(), dict(params, name=kodi.L(30021)), {'source': 'favourites'}, isFavorite=True)
+        searched(ImmichClient(), dict(params, name=kodi.L(30021)), {'source': 'favourites'}, isFavorite=True,
+                 visibility=TIMELINE)
     elif action == 'places':
         places(ImmichClient(), params.get('country'))
     elif action == 'place':

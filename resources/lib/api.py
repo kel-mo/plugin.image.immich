@@ -174,7 +174,7 @@ class ImmichClient:
 
     def smart_page(self, query, page=1, size=100):
         """Immich's AI search by description, best matches first: (assets, more pages follow)."""
-        body = {'query': query, 'page': page, 'size': size, 'withExif': True}
+        body = {'query': query, 'page': page, 'size': size, 'withExif': True, 'visibility': 'timeline'}
         res = (self.post('/search/smart', body) or {}).get('assets') or {}
         return [from_asset(a) for a in res.get('items') or []], bool(res.get('nextPage'))
 
