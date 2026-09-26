@@ -53,7 +53,7 @@
     <control type="videowindow" id="2">
       <width>1920</width>
       <height>1080</height>
-      <visible>Player.HasVideo</visible>
+      <visible>String.IsEqual(Window.Property(immich.video),true)</visible>
     </control>
 
     <!-- caption -->
@@ -109,7 +109,7 @@
       <textcolor>DDFFFFFF</textcolor>
       <shadowcolor>AA000000</shadowcolor>
       <label>$INFO[System.Time]</label>
-      <visible>String.IsEqual(Window.Property(immich.clock),true) + !Player.HasVideo</visible>
+      <visible>String.IsEqual(Window.Property(immich.clock),true) + String.IsEmpty(Window.Property(immich.video))</visible>
     </control>
 
     <control type="label">

@@ -63,6 +63,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         """Load an image into a hidden layer so it is ready before it fades in."""
         asset = self.assets[index]
         group, back, cover, fit = self.layers[layer]
+        group.setAnimations([anim('fade', start=0, end=0, time=0)])   # may still be fading out
         url = self.client.thumb_url(asset['id'], self.size if asset['image'] else 'preview')
         full = abs(asset['ratio'] - SCREEN) < 0.3
         if full:
@@ -99,7 +100,9 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.preload_at = self.shown_at + fade / 1000.0 + 0.3
         self.next_at = self.shown_at + self.stay + fade / 1000.0
         if not asset['image']:
-            self.play_video(asset)
+            # start once the poster is up
+            self.video = {'id': asset['id'], 'at': self.shown_at + fade / 1000.0 + 0.3, 'started': False}
+            self.next_at = None
 
     def pan_zoom(self, fade):
         """Slow zoom in or out around a random focal point, spanning the fades on both ends."""
@@ -114,27 +117,32 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.setProperty('immich.position', '{} / {}'.format(self.index + 1, len(self.assets)))
 
     # ---------------------------------------------------------------- video
-    def play_video(self, asset):
-        url = self.client.video_url(asset['id'])
+    def play_video(self):
+        url = self.client.video_url(self.video['id'])
         li = xbmcgui.ListItem(path=url, offscreen=True)
         li.setMimeType('video/mp4')
         li.setContentLookup(False)
-        self.player.play(url, li, True)
-        self.video = {'started': False, 'deadline': time.time() + 20}
-        self.next_at = None
+        self.player.play(url, li)
+        self.video.update(at=None, deadline=time.time() + 20)
+        self.setProperty('immich.video', 'true')
         self.setProperty('immich.status', '')
 
     def stop_video(self):
         if self.video:
+            started = self.video['at'] is None
             self.video = None
-            if self.player.isPlaying():
+            self.setProperty('immich.video', '')
+            if started and self.player.isPlaying():
                 self.player.stop()
 
     def poll_video(self):
-        if self.player.isPlayingVideo():
+        if self.video['at'] is not None:
+            if time.time() >= self.video['at']:
+                self.play_video()
+        elif self.player.isPlayingVideo():
             self.video['started'] = True
         elif self.video['started'] or time.time() > self.video['deadline']:
-            self.video = None
+            self.stop_video()
             if self.playing:
                 self.display(self.index + 1)
             else:
@@ -158,6 +166,8 @@ class Viewer(xbmcgui.WindowXMLDialog):
 
     def run(self):
         self.setup()
+        if self.player.isPlaying():
+            self.player.stop()
         if not self.playing:
             self.setProperty('immich.status', kodi.L(30700))
         monitor = xbmc.Monitor()
@@ -176,7 +186,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
                 self.poll_video()
             elif self.playing and self.next_at and now >= self.next_at:
                 self.display(self.index + 1)
-            elif self.shown is not None and self.preload_at and now >= self.preload_at:
+            if self.shown is not None and self.preload_at and now >= self.preload_at:
                 self.preload_at = None
                 nxt = (self.index + 1) % len(self.assets)
                 self.prepare(nxt, self.free_layer())
