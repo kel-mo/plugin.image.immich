@@ -283,6 +283,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
             started = self.video['at'] is None
             self.video = None
             self.setProperty('immich.video', '')
+            self.setProperty('immich.status', '' if self.playing else kodi.L(30700))
             if started and self.player.isPlaying():
                 self.player.stop()
 
@@ -307,7 +308,12 @@ class Viewer(xbmcgui.WindowXMLDialog):
             self.display(self.index + 1, 500)
         elif action in PREV:
             self.display(self.index - 1, 500)
-        elif action in PAUSE and not self.video:
+        elif action in PAUSE and self.video:
+            if self.video['at'] is None:                # started; pause the player itself
+                self.player.pause()
+                self.video['paused'] = not self.video.get('paused')
+                self.setProperty('immich.status', kodi.L(30700) if self.video['paused'] else '')
+        elif action in PAUSE:
             now = time.time()
             self.playing = not self.playing
             self.setProperty('immich.status', '' if self.playing else kodi.L(30700))
