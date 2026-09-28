@@ -83,26 +83,27 @@
       <visible>String.IsEqual(Window.Property(immich.captions),true) + !String.IsEmpty(Window.Property(immich.date))</visible>
       <animation effect="fade" time="400">VisibleChange</animation>
       <control type="image">
-        <top>700</top>
+        <top>880</top>
         <width>1920</width>
-        <height>380</height>
+        <height>200</height>
         <texture>shade.png</texture>
       </control>
       <control type="label">
         <left>80</left>
-        <top>900</top>
-        <width>1400</width>
-        <height>60</height>
-        <font>font45</font>
-        <textcolor>FFFFFFFF</textcolor>
+        <top>970</top>
+        <width>400</width>
+        <height>40</height>
+        <font>font13</font>
+        <textcolor>99FFFFFF</textcolor>
         <shadowcolor>AA000000</shadowcolor>
         <label>$INFO[Window.Property(immich.date)]</label>
       </control>
       <control type="label">
-        <left>82</left>
+        <left>480</left>
         <top>970</top>
-        <width>1400</width>
+        <width>960</width>
         <height>40</height>
+        <align>center</align>
         <font>font13</font>
         <textcolor>DDFFFFFF</textcolor>
         <shadowcolor>AA000000</shadowcolor>
