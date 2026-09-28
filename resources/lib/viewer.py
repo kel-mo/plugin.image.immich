@@ -24,7 +24,6 @@ INFO = {11}
 STOP = 'PlayerControl(Stop)'
 PLAY_PAUSE = 'PlayerControl(Play)'
 UNDECODABLE = {'image/avif'}             # originals LibreELEC's Kodi can't show over http
-UPRIGHT = {'0', '1'}                     # others: newer FFmpeg leaves Kodi showing originals unrotated
 
 
 _slowdown = None
@@ -168,16 +167,16 @@ class Viewer(xbmcgui.WindowXMLDialog):
         return self.raws[asset['id']]
 
     def photo_size(self, asset):
-        """fullsize redirects to web-safe originals; Kodi may not decode AVIF ones or turn rotated ones upright."""
+        """fullsize redirects to web-safe originals, and Kodi may not decode AVIF ones."""
         if self.size != 'fullsize' or not asset['image']:
             return 'preview'
-        if asset.get('mime') is None or asset.get('orientation') is None:   # timeline months carry neither
+        mime = asset.get('mime')
+        if mime is None:                            # timeline months don't carry the file type
             raw = self.raw(asset)
             if raw is None:
                 return 'preview'
-            asset['mime'] = raw.get('originalMimeType') or ''
-            asset['orientation'] = str((raw.get('exifInfo') or {}).get('orientation') or 1)
-        return 'fullsize' if asset['mime'] not in UNDECODABLE and asset['orientation'] in UPRIGHT else 'preview'
+            mime = asset['mime'] = raw.get('originalMimeType') or ''
+        return 'preview' if mime in UNDECODABLE else 'fullsize'
 
     def display(self, index, fade=None):
         if self.more and index >= len(self.assets) - 3:

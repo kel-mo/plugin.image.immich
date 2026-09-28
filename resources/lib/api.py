@@ -278,5 +278,4 @@ def from_asset(a):
             'duration': _seconds(a.get('duration')), 'city': exif.get('city'),
             'country': exif.get('country'), 'live': a.get('livePhotoVideoId'),
             'favorite': bool(a.get('isFavorite')), 'thumbhash': a.get('thumbhash'),
-            'mime': a.get('originalMimeType'),
-            'orientation': str(exif.get('orientation') or 1) if 'exifInfo' in a else None}
+            'mime': a.get('originalMimeType')}
