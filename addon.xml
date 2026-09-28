@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.image.immich" name="Immich" version="0.2.0" provider-name="kel-mo">
+<addon id="plugin.image.immich" name="Immich" version="0.2.1" provider-name="kel-mo">
   <requires>
     <import addon="xbmc.python" version="3.0.1"/>
   </requires>
@@ -15,7 +15,9 @@
     <license>GPL-2.0-or-later</license>
     <source>https://github.com/kel-mo/plugin.image.immich</source>
     <website>https://immich.app</website>
-    <news>v0.2.0
+    <news>v0.2.1
+- Fix Kodi freezing for minutes when a video stops
+v0.2.0
 - The API key no longer shows up in Kodi's debug log or image cache
 - Pause and resume videos in the slideshow
 - Date, place and count share one row under each photo
