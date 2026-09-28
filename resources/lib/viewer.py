@@ -20,6 +20,9 @@ PAUSE = {7, 12, 79, 229}                 # select, pause, play, play/pause
 NEXT = {2, 14, 77}                       # right, next item, fast forward
 PREV = {1, 15, 78}                       # left, previous item, rewind
 INFO = {11}
+# Player.stop() and pause() hold the GIL until Kodi is done, and closing a file asks the proxy for its date
+STOP = 'PlayerControl(Stop)'
+PLAY_PAUSE = 'PlayerControl(Play)'
 UNDECODABLE = {'image/avif'}             # originals LibreELEC's Kodi can't show over http
 
 
@@ -285,7 +288,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
             self.setProperty('immich.video', '')
             self.setProperty('immich.status', '' if self.playing else kodi.L(30700))
             if started and self.player.isPlaying():
-                self.player.stop()
+                xbmc.executebuiltin(STOP)
 
     def poll_video(self):
         if self.video['at'] is not None:
@@ -310,7 +313,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
             self.display(self.index - 1, 500)
         elif action in PAUSE and self.video:
             if self.video['at'] is None:                # started; pause the player itself
-                self.player.pause()
+                xbmc.executebuiltin(PLAY_PAUSE)
                 self.video['paused'] = not self.video.get('paused')
                 self.setProperty('immich.status', kodi.L(30700) if self.video['paused'] else '')
         elif action in PAUSE:
@@ -330,7 +333,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
     def run(self):
         self.setup()
         if self.player.isPlaying():
-            self.player.stop()
+            xbmc.executebuiltin(STOP)
         if not self.playing:
             self.setProperty('immich.status', kodi.L(30700))
         monitor = xbmc.Monitor()
