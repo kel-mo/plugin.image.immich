@@ -272,7 +272,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
 
     # ---------------------------------------------------------------- video
     def play_video(self):
-        url = self.client.video_url(self.video['id'])
+        url = items.video_path(self.video['id'])
         li = xbmcgui.ListItem(path=url, offscreen=True)
         li.setMimeType('video/mp4')
         li.setContentLookup(False)

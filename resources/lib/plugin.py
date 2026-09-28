@@ -331,6 +331,13 @@ def source_assets(client, params):
     return []
 
 
+def video(client, asset_id):
+    li = xbmcgui.ListItem(path=client.video_url(asset_id), offscreen=True)
+    li.setMimeType('video/mp4')
+    li.setContentLookup(False)
+    xbmcplugin.setResolvedUrl(HANDLE, True, li)
+
+
 def play(client, params):
     xbmc.executebuiltin('ActivateWindow(busydialognocancel)')
     try:
@@ -415,6 +422,8 @@ def dispatch(action, params):
         person(ImmichClient(), params)
     elif action == 'play':
         play(ImmichClient(), params)
+    elif action == 'video':
+        video(ImmichClient(), params['id'])
     else:
         kodi.log('unknown action {}'.format(action), xbmc.LOGWARNING)
         end(False)

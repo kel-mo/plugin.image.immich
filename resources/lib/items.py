@@ -3,6 +3,8 @@
 import xbmc
 import xbmcgui
 
+from . import kodi
+
 _formats = {}
 
 
@@ -19,6 +21,11 @@ def when(taken):
     return taken.strftime('{} {}'.format(region('dateshort'), clock))
 
 
+def video_path(asset_id):
+    """Kodi skips its file date check for plugin paths; answering it from the proxy can stall Kodi."""
+    return 'plugin://{}/?action=video&id={}'.format(kodi.ADDON_ID, asset_id)
+
+
 def place(asset):
     return ', '.join(p for p in (asset.get('city'), asset.get('country')) if p)
 
@@ -30,7 +37,7 @@ def asset_item(client, asset, path=None):
     if asset['image']:
         url = client.thumb_url(asset['id'], 'preview')
     else:
-        url = client.video_url(asset['id'])
+        url = video_path(asset['id'])
     li = xbmcgui.ListItem(label, place(asset), path=path or url, offscreen=True)
     li.setArt({'thumb': thumb, 'icon': thumb})
     li.setContentLookup(False)
@@ -46,6 +53,7 @@ def asset_item(client, asset, path=None):
             tag.setDateTimeTaken(asset['taken'].strftime('%Y-%m-%dT%H:%M:%S'))
     else:
         li.setMimeType('video/mp4')
+        li.setProperty('IsPlayable', 'true')
         tag = li.getVideoInfoTag()
         tag.setTitle(label)
         tag.setMediaType('video')
