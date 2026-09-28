@@ -94,7 +94,7 @@
         <width>400</width>
         <height>40</height>
         <font>font13</font>
-        <textcolor>99FFFFFF</textcolor>
+        <textcolor>DDFFFFFF</textcolor>
         <shadowcolor>AA000000</shadowcolor>
         <label>$INFO[Window.Property(immich.date)]</label>
       </control>
@@ -116,7 +116,7 @@
         <height>40</height>
         <align>right</align>
         <font>font13</font>
-        <textcolor>99FFFFFF</textcolor>
+        <textcolor>DDFFFFFF</textcolor>
         <shadowcolor>AA000000</shadowcolor>
         <label>$INFO[Window.Property(immich.position)]</label>
       </control>
