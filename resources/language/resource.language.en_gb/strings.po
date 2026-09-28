@@ -266,6 +266,10 @@ msgctxt "#30625"
 msgid "The API key is missing these permissions: {0}"
 msgstr ""
 
+msgctxt "#30626"
+msgid "The Immich service is not running. Restart Kodi and try again."
+msgstr ""
+
 # Viewer 30700-30799
 
 msgctxt "#30700"

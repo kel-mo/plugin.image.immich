@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 
 import xbmc
 
-from . import kodi
+from . import kodi, proxy
 
 MIN_SERVER = (2, 0, 0)
 TIMEOUT = 30
@@ -43,6 +43,18 @@ def clean_url(url):
                  or host.endswith(('.local', '.lan', '.home.arpa', '.internal')))
         url = ('http://' if plain else 'https://') + url
     return url
+
+
+def proxy_address():
+    """Waits a moment for the service when Kodi has just started."""
+    monitor = xbmc.Monitor()
+    for _ in range(30):
+        base = proxy.address()
+        if base or monitor.waitForAbort(0.1):
+            break
+    if not base:
+        raise ApiError(kodi.L(30626))
+    return base
 
 
 _monitor = None
@@ -196,8 +208,8 @@ class ImmichClient:
 
     # ------------------------------------------------------------------ media
     def media_url(self, path, **params):
-        """Kodi fetches these itself; the API key rides along as a pipe header."""
-        return '{}|x-api-key={}'.format(self.url(path, **params), quote(self.api_key or '', safe=''))
+        """Kodi fetches these through the local proxy, which adds the API key."""
+        return proxy_address() + self.url(path, **params)[len(self.base_url):]
 
     def thumb_url(self, asset_id, size='thumbnail'):
         # fullsize only falls back to the original when edits are not requested

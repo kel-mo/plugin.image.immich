@@ -36,6 +36,12 @@ class ControlImage:
 class ControlLabel(ControlImage): pass
 class ControlTextBox(ControlImage): pass
 class ControlButton(ControlImage): pass
+class Window:
+    PROPS = {}
+    def __init__(self, i=0): pass
+    def getProperty(self, k): return Window.PROPS.get(k, '')
+    def setProperty(self, k, v): Window.PROPS[k] = v
+    def clearProperty(self, k): Window.PROPS.pop(k, None)
 class WindowXMLDialog(WindowDialog):
     def __init__(self, *a, **k): self.props = {}
     def setProperty(self, k, v): self.props[k] = v

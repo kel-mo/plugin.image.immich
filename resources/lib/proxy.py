@@ -1,0 +1,122 @@
+# -*- coding: utf-8 -*-
+"""Local media proxy: Kodi fetches from 127.0.0.1 and the proxy adds the API key, so the key stays out
+of Kodi's logs and texture cache."""
+import os
+import re
+import socket
+import ssl
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+import xbmc
+import xbmcgui
+
+from . import kodi
+
+PORT = 52283                             # fixed so Kodi's texture cache keeps its addresses
+TRIES = 10
+PROPERTY = '{}.proxy'.format(kodi.ADDON_ID)   # Home window property holding the port
+TIMEOUT = 30
+CHUNK = 64 * 1024
+ALLOWED = re.compile(r'/api/(assets/[0-9a-f-]+/(thumbnail|original|video/playback)|people/[0-9a-f-]+/thumbnail)$')
+REQUEST_HEADERS = ('Range', 'If-None-Match', 'If-Modified-Since')
+RESPONSE_HEADERS = ('Content-Type', 'Content-Length', 'Content-Range', 'Accept-Ranges', 'Cache-Control', 'ETag',
+                    'Last-Modified')
+
+
+def address():
+    """The running proxy's base address, or None while the service isn't up."""
+    port = xbmcgui.Window(10000).getProperty(PROPERTY)
+    return 'http://127.0.0.1:{}'.format(port) if port else None
+
+
+class Server(ThreadingHTTPServer):
+    allow_reuse_address = os.name != 'nt'   # on Windows it lets a second server share the port
+    base_url = ''
+    api_key = ''
+
+    def __init__(self, port):
+        super().__init__(('127.0.0.1', port), Handler)
+        self.hosts = {'127.0.0.1:{}'.format(port), 'localhost:{}'.format(port)}
+        self.ssl_ctx = ssl.create_default_context()
+
+
+class Handler(BaseHTTPRequestHandler):
+    timeout = 60
+
+    def log_message(self, fmt, *args):
+        kodi.debug('proxy: ' + fmt % args)
+
+    def do_HEAD(self):
+        self.relay()
+
+    def do_GET(self):
+        self.relay()
+
+    def relay(self):
+        path = self.path.split('?', 1)[0]
+        if self.headers.get('Host') not in self.server.hosts:   # DNS rebinding
+            return self.send_error(403)
+        if not ALLOWED.match(path) or not self.server.base_url:
+            return self.send_error(404)
+        headers = {k: self.headers[k] for k in REQUEST_HEADERS if self.headers.get(k)}
+        headers['x-api-key'] = self.server.api_key
+        req = Request(self.server.base_url + self.path, headers=headers, method=self.command)
+        try:
+            resp = urlopen(req, timeout=TIMEOUT, context=self.server.ssl_ctx)
+        except HTTPError as e:                  # 304 and 416 included
+            resp = e
+        except (URLError, socket.timeout, OSError) as e:
+            kodi.log('proxy: {} failed: {}'.format(path, e), xbmc.LOGWARNING)
+            return self.send_error(502)
+        with resp:
+            self.send_response(resp.status)
+            for k in RESPONSE_HEADERS:
+                if resp.headers.get(k):
+                    self.send_header(k, resp.headers[k])
+            self.end_headers()
+            if self.command == 'GET':
+                try:
+                    while True:
+                        data = resp.read(CHUNK)
+                        if not data:
+                            break
+                        self.wfile.write(data)
+                except (BrokenPipeError, ConnectionResetError, socket.timeout):
+                    pass                        # Kodi hangs up when it seeks
+
+
+def start():
+    for port in range(PORT, PORT + TRIES):
+        try:
+            server = Server(port)
+            break
+        except OSError:
+            continue
+    else:
+        kodi.log('proxy: no free port from {}'.format(PORT), xbmc.LOGERROR)
+        return None
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    xbmcgui.Window(10000).setProperty(PROPERTY, str(port))
+    kodi.log('proxy on port {}'.format(port))
+    return server
+
+
+def stop(server):
+    xbmcgui.Window(10000).clearProperty(PROPERTY)
+    server.shutdown()
+    server.server_close()
+
+
+def forget_keyed_textures():
+    """Drop cached images from before the proxy; their addresses carry the API key."""
+    found = kodi.jsonrpc('Textures.GetTextures', properties=['url'],
+                         filter={'and': [{'field': 'url', 'operator': 'contains', 'value': '/api/'},
+                                         {'field': 'url', 'operator': 'contains', 'value': '|x-api-key='}]})
+    textures = (found or {}).get('textures') or []
+    for t in textures:
+        kodi.jsonrpc('Textures.RemoveTexture', textureid=t['textureid'])
+    if textures:
+        kodi.log('proxy: forgot {} cached images with the API key'.format(len(textures)))
