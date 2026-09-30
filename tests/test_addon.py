@@ -71,6 +71,7 @@ os.environ['HOME'] = SCRATCH                    # hides the real Kodi profile fr
 os.environ['IMMICH_URL'] = MOCK
 os.environ['IMMICH_KEY'] = mock_immich.KEY
 
+import xbmc
 import xbmcaddon
 
 from resources.lib import api, kodi, plugin, viewer
@@ -100,6 +101,16 @@ def make_viewer(assets):
                          client=api.ImmichClient(), assets=assets, start=0, autoplay=True)
 
 
+class Music(xbmc.Player):
+    def isPlaying(self):
+        return True
+
+
+class Video(Music):
+    def isPlayingVideo(self):
+        return True
+
+
 class CutOff:
     closed = False
 
@@ -114,6 +125,13 @@ class CutOff:
 
     def close(self):
         self.closed = True
+
+
+class NoProxy(unittest.TestCase):
+    def setUp(self):
+        patch = mock.patch.object(api, 'proxy_address', return_value='http://127.0.0.1:1')
+        patch.start()
+        self.addCleanup(patch.stop)
 
 
 class Harness(unittest.TestCase):
@@ -145,6 +163,23 @@ class ReadErrors(unittest.TestCase):
         window = make_viewer([])
         window.raws, window.quick = {}, api.ImmichClient(BROKEN, 'k')
         self.assertIsNone(window.raw({'id': 'c4ca4238-a0b9-2382-0dcc-509a6f75849b'}))
+
+
+class Slideshow(NoProxy):
+    def run_viewer(self, player):
+        assets = api.ImmichClient().search_page(size=2)[0]
+        window = make_viewer(assets)
+        window.actions = [10]
+        with mock.patch.object(xbmc, 'Player', player):
+            window.run()
+        return window
+
+    def test_music_keeps_playing(self):
+        xbmc.BUILTINS.clear()
+        self.run_viewer(Music)
+        self.assertNotIn(viewer.STOP, xbmc.BUILTINS)
+        self.run_viewer(Video)
+        self.assertIn(viewer.STOP, xbmc.BUILTINS)
 
 
 if __name__ == '__main__':

@@ -333,7 +333,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
 
     def run(self):
         self.setup()
-        if self.player.isPlaying():
+        if self.player.isPlayingVideo():
             xbmc.executebuiltin(STOP)
         if not self.playing:
             self.setProperty('immich.status', kodi.L(30700))
