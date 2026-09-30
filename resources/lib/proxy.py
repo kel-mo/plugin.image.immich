@@ -6,6 +6,7 @@ import re
 import socket
 import ssl
 import threading
+from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -84,8 +85,8 @@ class Handler(BaseHTTPRequestHandler):
                         if not data:
                             break
                         self.wfile.write(data)
-                except (BrokenPipeError, ConnectionResetError, socket.timeout):
-                    pass                        # Kodi hangs up when it seeks
+                except (IncompleteRead, OSError):
+                    pass                        # Kodi hangs up when it seeks, or the server drops out
 
 
 def start():

@@ -192,6 +192,18 @@ class Proxy(unittest.TestCase):
         with urlopen(f'{self.base}/api/assets/{self.asset}/thumbnail', timeout=10) as resp:
             self.assertEqual((resp.status, resp.read(8)), (200, b'\x89PNG\r\n\x1a\n'))
 
+    def test_upstream_cut_off(self):
+        errors = []
+        settings = {'server_url': BROKEN, 'api_key': 'k'}
+        with mock.patch.object(kodi, 'fresh_setting', side_effect=settings.get):
+            self.monitor.onSettingsChanged()
+        self.addCleanup(self.monitor.onSettingsChanged)
+        with mock.patch.object(self.server, 'handle_error', side_effect=lambda *a: errors.append(sys.exc_info()[1])):
+            with urlopen(f'{self.base}/api/assets/{self.asset}/original', timeout=10) as resp:
+                resp.read()
+            time.sleep(0.2)
+        self.assertEqual(errors, [])
+
 
 class Slideshow(NoProxy):
     def run_viewer(self, player):
