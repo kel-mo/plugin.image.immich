@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Minimal Immich REST client built on urllib (no external dependencies)."""
+import ipaddress
 import json
 import socket
 import ssl
@@ -37,11 +38,16 @@ def clean_url(url):
     if url.endswith('/api'):
         url = url[:-4]
     if url and not url.startswith(('http://', 'https://')):
-        netloc = url.split('/')[0]
-        host = netloc.rsplit(':', 1)[0].strip('[]').lower()
-        # IPs, single-label names, LAN domains and Immich's own port are usually plain http
-        plain = ('.' not in host or host.replace('.', '').isdigit() or ':' in host or netloc.endswith(':2283')
-                 or host.endswith(('.local', '.lan', '.home.arpa', '.internal')))
+        host = url.split('/')[0].lower()
+        if host.startswith('['):
+            host = host[1:].split(']')[0]
+        elif host.count(':') == 1:
+            host = host.split(':')[0]
+        # LAN IPs, single-label names and LAN domains are usually plain http
+        try:
+            plain = not ipaddress.ip_address(host).is_global
+        except ValueError:
+            plain = '.' not in host or host.endswith(('.local', '.lan', '.home.arpa', '.internal'))
         url = ('http://' if plain else 'https://') + url
     return url
 

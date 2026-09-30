@@ -175,6 +175,13 @@ class Refusals(unittest.TestCase):
                 self.assertEqual(str(e.exception), text)
 
 
+class CleanUrl(unittest.TestCase):
+    def test_default_scheme(self):
+        for typed, want in SCHEMES.items():
+            with self.subTest(typed=typed):
+                self.assertEqual(api.clean_url(typed), want)
+
+
 class Proxy(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
