@@ -338,7 +338,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
             xbmc.executebuiltin(STOP)
         if not self.playing:
             self.setProperty('immich.status', kodi.L(30700))
-        monitor = xbmc.Monitor()
+        monitor = self.monitor
         self.prepare(self.index, 0)
         monitor.waitForAbort(0.8)            # give the first image a head start
         self.display(self.index)

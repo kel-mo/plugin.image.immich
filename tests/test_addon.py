@@ -230,6 +230,19 @@ class Slideshow(NoProxy):
         self.run_viewer(Video)
         self.assertIn(viewer.STOP, xbmc.BUILTINS)
 
+    def test_one_monitor(self):
+        api.aborting()
+        made = []
+
+        class Counted(xbmc.Monitor):
+            def __init__(self):
+                super().__init__()
+                made.append(self)
+
+        with mock.patch.object(xbmc, 'Monitor', Counted):
+            self.run_viewer(xbmc.Player)
+        self.assertEqual(len(made), 1)
+
     def test_backdrop_ignores_unsafe_id(self):
         window = make_viewer([])
         found = window.backdrop({'id': '../escaped', 'thumbhash': THUMBHASH})
