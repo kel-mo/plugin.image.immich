@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.image.immich" name="Immich" version="0.2.2" provider-name="kel-mo">
+<addon id="plugin.image.immich" name="Immich" version="0.2.3" provider-name="kel-mo">
   <requires>
     <import addon="xbmc.python" version="3.0.1"/>
   </requires>
@@ -15,7 +15,13 @@
     <license>GPL-2.0-or-later</license>
     <source>https://github.com/kel-mo/plugin.image.immich</source>
     <website>https://immich.app</website>
-    <news>v0.2.2
+    <news>v0.2.3
+- Music keeps playing when a slideshow starts
+- The API key is hidden while you type it
+- An address without http:// or https:// uses https, except on the local network
+- Clearer message when the API key lacks a permission
+- A dropped or stalled connection shows an error instead of failing
+v0.2.2
 - Rotated photos show upright with full resolution on
 v0.2.1
 - Fix Kodi freezing for minutes when a video stops
