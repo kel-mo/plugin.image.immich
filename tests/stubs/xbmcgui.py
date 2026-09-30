@@ -1,5 +1,5 @@
 """Kodi stub: dialogs print, record in LOG and answer from ANSWERS."""
-NOTIFICATION_ERROR = 'error'; INPUT_ALPHANUM = 0
+NOTIFICATION_ERROR = 'error'; INPUT_ALPHANUM = 0; ALPHANUM_HIDE_INPUT = 2
 ANSWERS = {'select': [], 'yesno': [], 'input': []}
 LOG = []
 class Dialog:

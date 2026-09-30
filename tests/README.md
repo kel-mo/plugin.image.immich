@@ -10,3 +10,9 @@ PYTHONPATH=tests/stubs:. python3 -c 'from resources.lib import plugin; \
 ```
 
 Listed items are in `xbmcplugin.ITEMS`, dialogs answer from `xbmcgui.ANSWERS`.
+
+Regression tests use a fake server on a free port and never read the Kodi profile:
+
+```
+python3 -m unittest discover -s tests
+```
