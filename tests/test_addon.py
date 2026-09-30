@@ -78,6 +78,7 @@ import xbmcgui
 
 from resources.lib import api, kodi, plugin, proxy, service, signin, viewer
 
+THUMBHASH = '1QcSHQRnh493V4dIh4eXh1h4kJUI'
 SCHEMES = {'immich': 'http://immich', 'immich:2283': 'http://immich:2283', 'photos.local': 'http://photos.local',
            'nas.lan:2283': 'http://nas.lan:2283', '192.168.1.5:2283': 'http://192.168.1.5:2283',
            '127.0.0.1': 'http://127.0.0.1', '169.254.1.1': 'http://169.254.1.1',
@@ -228,6 +229,14 @@ class Slideshow(NoProxy):
         self.assertNotIn(viewer.STOP, xbmc.BUILTINS)
         self.run_viewer(Video)
         self.assertIn(viewer.STOP, xbmc.BUILTINS)
+
+    def test_backdrop_ignores_unsafe_id(self):
+        window = make_viewer([])
+        found = window.backdrop({'id': '../escaped', 'thumbhash': THUMBHASH})
+        self.assertFalse(os.path.exists(os.path.join(kodi.PROFILE, 'escaped.png')))
+        self.assertFalse(found.endswith('.png'))
+        good = window.backdrop({'id': 'c4ca4238-a0b9-2382-0dcc-509a6f75849b', 'thumbhash': THUMBHASH})
+        self.assertTrue(os.path.exists(good))
 
 
 class SignIn(unittest.TestCase):

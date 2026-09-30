@@ -25,6 +25,7 @@ STOP = 'PlayerControl(Stop)'
 PLAY_PAUSE = 'PlayerControl(Play)'
 UNDECODABLE = {'image/avif'}             # originals LibreELEC's Kodi can't show over http
 UPRIGHT = {'0', '1'}                     # others: newer FFmpeg leaves Kodi showing originals unrotated
+ASSET_ID = re.compile(r'[0-9a-f-]+')     # safe in a file name
 
 
 _slowdown = None
@@ -146,7 +147,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
 
     def backdrop(self, asset):
         """A blurred copy from the asset's thumbhash; the small thumbnail looks blocky when stretched."""
-        if asset.get('thumbhash'):
+        if asset.get('thumbhash') and ASSET_ID.fullmatch(asset['id']):
             path = os.path.join(backdrop_dir(), asset['id'] + '.png')
             if not os.path.exists(path):
                 try:
