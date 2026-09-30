@@ -7,7 +7,9 @@ import tempfile
 import threading
 import time
 import unittest
+from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRATCH = tempfile.mkdtemp(prefix='immich-tests-')
@@ -71,7 +73,7 @@ os.environ['IMMICH_KEY'] = mock_immich.KEY
 
 import xbmcaddon
 
-from resources.lib import api, kodi, viewer
+from resources.lib import api, kodi, plugin, viewer
 
 SCHEMES = {'immich': 'http://immich', 'immich:2283': 'http://immich:2283', 'photos.local': 'http://photos.local',
            'nas.lan:2283': 'http://nas.lan:2283', '192.168.1.5:2283': 'http://192.168.1.5:2283',
@@ -98,11 +100,51 @@ def make_viewer(assets):
                          client=api.ImmichClient(), assets=assets, start=0, autoplay=True)
 
 
+class CutOff:
+    closed = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    def read(self):
+        raise IncompleteRead(b'')
+
+    def close(self):
+        self.closed = True
+
+
 class Harness(unittest.TestCase):
     def test_fake_server_only(self):
         self.assertTrue(xbmcaddon._S.startswith(SCRATCH))
         self.assertEqual((kodi.setting('server_url'), kodi.setting('api_key')), (MOCK, mock_immich.KEY))
         self.assertEqual(api.ImmichClient().server_version(), (3, 2, 2))
+
+
+class ReadErrors(unittest.TestCase):
+    def test_truncated_body(self):
+        with self.assertRaises(api.ApiError):
+            api.ImmichClient(BROKEN, 'k').get('/assets')
+
+    def test_stalled_body(self):
+        with self.assertRaises(api.ApiError):
+            api.ImmichClient(BROKEN, 'k', timeout=0.5).get('/stall')
+
+    def test_response_closed(self):
+        resp = CutOff()
+        with mock.patch.object(api, 'urlopen', return_value=resp), self.assertRaises(api.ApiError):
+            api.ImmichClient(BROKEN, 'k').get('/assets')
+        self.assertTrue(resp.closed)
+
+    def test_callers_degrade(self):
+        probe = plugin.Probe()
+        self.assertIs(probe(api.ImmichClient(BROKEN, 'k').albums, True, False), False)
+        self.assertTrue(probe.offline)
+        window = make_viewer([])
+        window.raws, window.quick = {}, api.ImmichClient(BROKEN, 'k')
+        self.assertIsNone(window.raw({'id': 'c4ca4238-a0b9-2382-0dcc-509a6f75849b'}))
 
 
 if __name__ == '__main__':

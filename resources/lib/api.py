@@ -4,6 +4,7 @@ import json
 import socket
 import ssl
 from datetime import datetime, timedelta
+from http.client import HTTPException
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
@@ -104,7 +105,8 @@ class ImmichClient:
         req = Request(url, data=data, headers=self.headers(extra), method=method)
         kodi.debug('{} {}'.format(method, url))
         try:
-            resp = urlopen(req, timeout=timeout or self.timeout, context=self.ssl_ctx)
+            with urlopen(req, timeout=timeout or self.timeout, context=self.ssl_ctx) as resp:
+                payload = resp.read()
         except HTTPError as e:
             detail = None
             try:
@@ -116,10 +118,8 @@ class ImmichClient:
             if e.code in (401, 403):
                 raise AuthError(kodi.L(30615), e.code, detail)
             raise ApiError('HTTP {} for {}: {}'.format(e.code, path, detail or e.reason), e.code, detail)
-        except (URLError, socket.timeout, OSError) as e:
+        except (URLError, socket.timeout, OSError, HTTPException) as e:
             raise ApiError('{}: {}'.format(kodi.L(30614), e))
-        payload = resp.read()
-        resp.close()
         if not payload:
             return None
         try:
