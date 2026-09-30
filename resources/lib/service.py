@@ -13,8 +13,7 @@ class Monitor(xbmc.Monitor):
         self.onSettingsChanged()
 
     def onSettingsChanged(self):
-        self.server.base_url = clean_url(kodi.fresh_setting('server_url'))
-        self.server.api_key = kodi.fresh_setting('api_key')
+        self.server.upstream = (clean_url(kodi.fresh_setting('server_url')), kodi.fresh_setting('api_key'))
 
 
 def run():

@@ -34,8 +34,7 @@ def address():
 
 class Server(ThreadingHTTPServer):
     allow_reuse_address = os.name != 'nt'   # on Windows it lets a second server share the port
-    base_url = ''
-    api_key = ''
+    upstream = ('', '')                     # (base_url, api_key)
 
     def __init__(self, port):
         super().__init__(('127.0.0.1', port), Handler)
@@ -59,11 +58,12 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split('?', 1)[0]
         if self.headers.get('Host') not in self.server.hosts:   # DNS rebinding
             return self.send_error(403)
-        if not ALLOWED.match(path) or not self.server.base_url:
+        base_url, api_key = self.server.upstream
+        if not ALLOWED.match(path) or not base_url:
             return self.send_error(404)
         headers = {k: self.headers[k] for k in REQUEST_HEADERS if self.headers.get(k)}
-        headers['x-api-key'] = self.server.api_key
-        req = Request(self.server.base_url + self.path, headers=headers, method=self.command)
+        headers['x-api-key'] = api_key
+        req = Request(base_url + self.path, headers=headers, method=self.command)
         try:
             resp = urlopen(req, timeout=TIMEOUT, context=self.server.ssl_ctx)
         except HTTPError as e:                  # 304 and 416 included

@@ -10,6 +10,7 @@ import unittest
 from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest import mock
+from urllib.request import urlopen
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRATCH = tempfile.mkdtemp(prefix='immich-tests-')
@@ -74,7 +75,7 @@ os.environ['IMMICH_KEY'] = mock_immich.KEY
 import xbmc
 import xbmcaddon
 
-from resources.lib import api, kodi, plugin, viewer
+from resources.lib import api, kodi, plugin, proxy, service, viewer
 
 SCHEMES = {'immich': 'http://immich', 'immich:2283': 'http://immich:2283', 'photos.local': 'http://photos.local',
            'nas.lan:2283': 'http://nas.lan:2283', '192.168.1.5:2283': 'http://192.168.1.5:2283',
@@ -163,6 +164,24 @@ class ReadErrors(unittest.TestCase):
         window = make_viewer([])
         window.raws, window.quick = {}, api.ImmichClient(BROKEN, 'k')
         self.assertIsNone(window.raw({'id': 'c4ca4238-a0b9-2382-0dcc-509a6f75849b'}))
+
+
+class Proxy(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.server = proxy.start()
+        cls.monitor = service.Monitor(cls.server)
+        cls.base = proxy.address()
+        cls.asset = api.ImmichClient().search_page(size=1)[0][0]['id']
+
+    @classmethod
+    def tearDownClass(cls):
+        proxy.stop(cls.server)
+
+    def test_settings_published_together(self):
+        self.assertEqual(self.server.upstream, (MOCK, mock_immich.KEY))
+        with urlopen(f'{self.base}/api/assets/{self.asset}/thumbnail', timeout=10) as resp:
+            self.assertEqual((resp.status, resp.read(8)), (200, b'\x89PNG\r\n\x1a\n'))
 
 
 class Slideshow(NoProxy):
