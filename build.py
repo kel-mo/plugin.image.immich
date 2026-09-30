@@ -7,7 +7,7 @@ import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ADDON_ID = os.path.basename(HERE)
-EXCLUDE_DIRS = {'.git', 'dist', '__pycache__', '.ruff_cache', '.claude', 'tests'}
+EXCLUDE_DIRS = {'.git', 'dist', '__pycache__', '.ruff_cache', '.claude', 'tests', '.github'}
 EXCLUDE_FILES = {'build.py', '.gitignore', 'README.md'}
 
 
