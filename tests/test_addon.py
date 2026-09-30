@@ -166,6 +166,15 @@ class ReadErrors(unittest.TestCase):
         self.assertIsNone(window.raw({'id': 'c4ca4238-a0b9-2382-0dcc-509a6f75849b'}))
 
 
+class Refusals(unittest.TestCase):
+    def test_403_is_a_permission(self):
+        for path, text in (('/401', kodi.L(30615)), ('/403', kodi.L(30627))):
+            with self.subTest(path=path):
+                with self.assertRaises(api.AuthError) as e:
+                    api.ImmichClient(BROKEN, 'k').get(path)
+                self.assertEqual(str(e.exception), text)
+
+
 class Proxy(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

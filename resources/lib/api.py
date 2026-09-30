@@ -116,7 +116,7 @@ class ImmichClient:
             if isinstance(detail, list):
                 detail = '; '.join(map(str, detail))
             if e.code in (401, 403):
-                raise AuthError(kodi.L(30615), e.code, detail)
+                raise AuthError(kodi.L(30615 if e.code == 401 else 30627), e.code, detail)
             raise ApiError('HTTP {} for {}: {}'.format(e.code, path, detail or e.reason), e.code, detail)
         except (URLError, socket.timeout, OSError, HTTPException) as e:
             raise ApiError('{}: {}'.format(kodi.L(30614), e))

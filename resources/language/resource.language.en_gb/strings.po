@@ -270,6 +270,10 @@ msgctxt "#30626"
 msgid "The Immich service is not running. Restart Kodi and try again."
 msgstr ""
 
+msgctxt "#30627"
+msgid "The API key is not allowed to do this. Check its permissions in Immich."
+msgstr ""
+
 # Viewer 30700-30799
 
 msgctxt "#30700"
