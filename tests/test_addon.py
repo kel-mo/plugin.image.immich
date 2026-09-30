@@ -74,8 +74,9 @@ os.environ['IMMICH_KEY'] = mock_immich.KEY
 
 import xbmc
 import xbmcaddon
+import xbmcgui
 
-from resources.lib import api, kodi, plugin, proxy, service, viewer
+from resources.lib import api, kodi, plugin, proxy, service, signin, viewer
 
 SCHEMES = {'immich': 'http://immich', 'immich:2283': 'http://immich:2283', 'photos.local': 'http://photos.local',
            'nas.lan:2283': 'http://nas.lan:2283', '192.168.1.5:2283': 'http://192.168.1.5:2283',
@@ -227,6 +228,20 @@ class Slideshow(NoProxy):
         self.assertNotIn(viewer.STOP, xbmc.BUILTINS)
         self.run_viewer(Video)
         self.assertIn(viewer.STOP, xbmc.BUILTINS)
+
+
+class SignIn(unittest.TestCase):
+    def test_api_key_hidden(self):
+        typed, answers = [], [MOCK, mock_immich.KEY]
+
+        def answer(dialog, heading, default='', **kwargs):
+            typed.append(kwargs)
+            return answers.pop(0)
+
+        with mock.patch.object(xbmcgui.Dialog, 'input', answer), \
+                mock.patch.object(kodi, 'fresh_setting', return_value=''):
+            self.assertTrue(signin.sign_in())
+        self.assertEqual(typed[1].get('option'), xbmcgui.ALPHANUM_HIDE_INPUT)
 
 
 if __name__ == '__main__':

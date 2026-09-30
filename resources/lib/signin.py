@@ -67,7 +67,7 @@ def sign_in():
                           type=xbmcgui.INPUT_ALPHANUM)
     if not server.strip():
         return False
-    api_key = dialog.input(kodi.L(30105), type=xbmcgui.INPUT_ALPHANUM)
+    api_key = dialog.input(kodi.L(30105), type=xbmcgui.INPUT_ALPHANUM, option=xbmcgui.ALPHANUM_HIDE_INPUT)
     if not api_key:
         return False
     try:
