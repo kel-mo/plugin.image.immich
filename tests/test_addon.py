@@ -661,6 +661,72 @@ class Skin(unittest.TestCase):
                          [0, 0, 0, 255, 255])
 
 
+class Screensaver(NoProxy):
+    def test_addon_declares_screensaver(self):
+        import xml.etree.ElementTree as ET
+        points = {e.get('point'): e.get('library') for e in ET.parse(os.path.join(ROOT, 'addon.xml')).iter('extension')}
+        self.assertEqual(points.get('xbmc.ui.screensaver'), 'screensaver.py')
+        self.assertTrue(os.path.exists(os.path.join(ROOT, 'screensaver.py')))
+
+    def run_screensaver(self, source, found):
+        from resources.lib import screensaver
+        shown, self.asked = [], []
+
+        def source_assets(client, params):
+            self.asked.append(params)
+            return found.get(params['source'], [])
+        with mock.patch.object(kodi, 'setting_int', lambda k: source if k == 'screensaver_source' else 0), \
+                mock.patch.object(plugin, 'source_assets', source_assets), \
+                mock.patch.object(viewer, 'play', lambda client, assets, **kw: shown.append((assets, kw))):
+            screensaver.run()
+        return shown
+
+    def test_shows_photos_only_as_a_screensaver(self):
+        found = {'memories': [{'id': 'p', 'image': True}, {'id': 'v', 'image': False}]}
+        shown = self.run_screensaver(0, found)
+        (assets, kw), = shown
+        self.assertEqual(([a['id'] for a in assets], kw.get('screensaver')), (['p'], True))
+
+    def test_falls_back_to_random(self):
+        shown = self.run_screensaver(0, {'random': [{'id': 'r', 'image': True}]})
+        (assets, kw), = shown
+        self.assertEqual([a['id'] for a in assets], ['r'])
+        self.assertIsNotNone(kw.get('more'))
+
+    def test_viewer_as_screensaver(self):
+        window = make_viewer([])
+        window.screensaver = True
+        window.getControl = lambda i: Recorder()
+        with mock.patch.object(kodi, 'setting_bool', lambda k: False):
+            window.setup()
+        self.assertTrue(window.kenburns)                    # always on in the screensaver
+        window.handle(2)                                    # any key wakes it
+        self.assertTrue(window.closed)
+        window.closed = False
+        window.monitor.onScreensaverDeactivated()
+        self.assertTrue(window.closed)
+
+    def test_screensaver_leaves_the_player_alone(self):
+        xbmc.BUILTINS.clear()
+        assets = api.ImmichClient().search_page(size=2)[0]
+        window = make_viewer(assets)
+        window.screensaver = True
+        window.actions = [10]
+        with mock.patch.object(xbmc, 'Player', Video):
+            window.run()
+        self.assertNotIn(viewer.STOP, xbmc.BUILTINS)
+
+    def test_settings_offer_the_sources(self):
+        import xml.etree.ElementTree as ET
+        setting = next(s for s in ET.parse(os.path.join(ROOT, 'resources', 'settings.xml')).iter('setting')
+                       if s.get('id') == 'screensaver_source')
+        labels = [o.get('label') for o in setting.iter('option')]
+        with open(os.path.join(ROOT, 'resources', 'language', 'resource.language.en_gb', 'strings.po')) as f:
+            po = f.read()
+        self.assertEqual(len(labels), 3)
+        self.assertTrue(all(f'msgctxt "#{n}"' in po for n in labels + [setting.get('label')]))
+
+
 class SignIn(unittest.TestCase):
     def test_api_key_hidden(self):
         typed, answers = [], [MOCK, mock_immich.KEY]

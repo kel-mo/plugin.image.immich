@@ -7,6 +7,7 @@
     <provides>image</provides>
   </extension>
   <extension point="xbmc.service" library="service.py"/>
+  <extension point="xbmc.ui.screensaver" library="screensaver.py"/>
   <extension point="xbmc.addon.metadata">
     <summary lang="en_GB">View your Immich photos and videos in Kodi</summary>
     <description lang="en_GB">Browse the timeline, On this day, people and pets, places, albums and favourites of a self-hosted Immich server, or search by description. Watch them as a slideshow that crossfades and slowly pans and zooms across each photo, with photo details at the press of Info. View only: nothing is changed on the server.</description>

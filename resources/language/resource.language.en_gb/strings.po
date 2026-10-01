@@ -224,6 +224,30 @@ msgctxt "#30302"
 msgid "Months and albums with more photos than this get a Next page entry."
 msgstr ""
 
+msgctxt "#30400"
+msgid "Screensaver"
+msgstr ""
+
+msgctxt "#30401"
+msgid "Photos to show"
+msgstr ""
+
+msgctxt "#30402"
+msgid "On this day"
+msgstr ""
+
+msgctxt "#30403"
+msgid "Random"
+msgstr ""
+
+msgctxt "#30404"
+msgid "Favourites"
+msgstr ""
+
+msgctxt "#30405"
+msgid "Ken Burns is always on in the screensaver. When there are no photos to show, random ones are used instead."
+msgstr ""
+
 msgctxt "#30500"
 msgid "Advanced"
 msgstr ""

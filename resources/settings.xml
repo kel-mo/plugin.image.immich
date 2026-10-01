@@ -140,6 +140,22 @@
         </setting>
       </group>
     </category>
+    <category id="screensaver" label="30400" help="">
+      <group id="1">
+        <setting id="screensaver_source" type="integer" label="30401" help="30405">
+          <level>0</level>
+          <default>0</default>
+          <constraints>
+            <options>
+              <option label="30402">0</option>
+              <option label="30403">1</option>
+              <option label="30404">2</option>
+            </options>
+          </constraints>
+          <control type="list" format="string"/>
+        </setting>
+      </group>
+    </category>
     <category id="browsing" label="30300" help="">
       <group id="1">
         <setting id="page_size" type="integer" label="30301" help="30302">

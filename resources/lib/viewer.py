@@ -93,6 +93,16 @@ def anim(effect, **attrs):
     return ('conditional', 'effect={} {}'.format(effect, ' '.join('{}={}'.format(k, v) for k, v in attrs.items())))
 
 
+class Waker(xbmc.Monitor):
+    """Closes the screensaver when Kodi wakes up."""
+    def __init__(self, window):
+        super().__init__()
+        self.window = window
+
+    def onScreensaverDeactivated(self):
+        self.window.closed = True
+
+
 class Viewer(xbmcgui.WindowXMLDialog):
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
@@ -101,6 +111,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.index = kwargs.get('start', 0)
         self.playing = kwargs.get('autoplay', True)
         self.more = kwargs.get('more')              # fetches another batch for endless shuffle
+        self.screensaver = kwargs.get('screensaver', False)
         self.seen = {a['id'] for a in self.assets}
         self.actions = []
         self.closed = False
@@ -115,7 +126,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
     def setup(self):
         self.stay = max(kodi.setting_int('slide_time'), 2)
         self.fade = max(int(kodi.setting_number('fade_time') * 1000), 200)
-        self.kenburns = kodi.setting_bool('kenburns')
+        self.kenburns = kodi.setting_bool('kenburns') or self.screensaver
         self.zoom = min(max(kodi.setting_int('zoom'), 100), 110)
         self.scale = self.zoom / 100.0 if self.kenburns else 1.0   # how far photo controls outsize the screen
         self.size = 'preview'
@@ -131,7 +142,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.info = 1 if kodi.setting_bool('captions') else 0   # 0 nothing, 1 caption, 2 caption and details
         self.raws = {}
         self.quick = ImmichClient(self.client.base_url, self.client.api_key, timeout=5)
-        self.monitor = xbmc.Monitor()
+        self.monitor = Waker(self) if self.screensaver else xbmc.Monitor()
         self.show_info()
         self.setProperty('immich.clock', 'true' if kodi.setting_bool('clock') else 'false')
         self.layers = [[self.getControl(base + k) for k in range(4)] for base in (100, 200)]
@@ -191,7 +202,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         except ApiError as e:
             kodi.log('shuffle refill failed: {}'.format(e), xbmc.LOGWARNING)
             return
-        if not kodi.setting_bool('videos'):
+        if self.screensaver or not kodi.setting_bool('videos'):
             batch = [a for a in batch if a['image']]
         new = [a for a in batch if a['id'] not in self.seen]
         if not new:                                 # everything shown once; allow repeats
@@ -485,7 +496,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
 
     # ----------------------------------------------------------------- loop
     def handle(self, action):
-        if action in CLOSE:
+        if action in CLOSE or self.screensaver:     # any key wakes the screensaver
             self.closed = True
         elif action in NEXT:
             self.display(self.index + 1, 500)
@@ -512,7 +523,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
 
     def run(self):
         self.setup()
-        if self.player.isPlayingVideo():
+        if self.player.isPlayingVideo() and not self.screensaver:
             xbmc.executebuiltin(STOP)
         if not self.playing:
             self.setProperty('immich.status', kodi.L(30700))
@@ -543,22 +554,25 @@ def backdrop_dir():
     return kodi.ensure_dir(os.path.join(kodi.PROFILE, 'backdrops'))
 
 
-def play(client, assets, start=0, autoplay=True, more=None):
-    if not kodi.setting_bool('videos'):
+def play(client, assets, start=0, autoplay=True, more=None, screensaver=False):
+    if screensaver or not kodi.setting_bool('videos'):
         current = assets[start]['id'] if 0 <= start < len(assets) else None
         assets = [a for a in assets if a['image']]
         start = next((i for i, a in enumerate(assets) if a['id'] == current), 0)
     if not assets:
-        kodi.notify(kodi.L(30701))
+        if not screensaver:
+            kodi.notify(kodi.L(30701))
         return
-    window = Viewer('script-immich-viewer.xml', kodi.ADDON_PATH, 'default', '1080i',
-                    client=client, assets=assets, start=start, autoplay=autoplay, more=more)
-    xbmc.executebuiltin('InhibitScreensaver(true)')
+    window = Viewer('script-immich-viewer.xml', kodi.ADDON_PATH, 'default', '1080i', client=client, assets=assets,
+                    start=start, autoplay=autoplay, more=more, screensaver=screensaver)
+    if not screensaver:
+        xbmc.executebuiltin('InhibitScreensaver(true)')
     window.show()
     try:
         window.run()
     finally:
         window.close()
         del window
-        xbmc.executebuiltin('InhibitScreensaver(false)')
+        if not screensaver:
+            xbmc.executebuiltin('InhibitScreensaver(false)')
         shutil.rmtree(backdrop_dir(), ignore_errors=True)
