@@ -33,6 +33,7 @@ class Quiet(mock_immich.Handler):
         pass
 
 
+
 class Broken(BaseHTTPRequestHandler):
     """/api/401 and /api/403 refuse, /api/stall stops mid-body, anything else is cut off mid-chunk."""
     protocol_version = 'HTTP/1.1'
@@ -250,6 +251,87 @@ class Slideshow(NoProxy):
         self.assertFalse(found.endswith('.png'))
         good = window.backdrop({'id': 'c4ca4238-a0b9-2382-0dcc-509a6f75849b', 'thumbhash': THUMBHASH})
         self.assertTrue(os.path.exists(good))
+
+
+class Recorder:
+    def __init__(self):
+        self.calls = []
+
+    def __getattr__(self, name):
+        return lambda *a, **k: self.calls.append((name,) + a)
+
+    def zooms(self):
+        """(start, end, center) of each zoom animation set, as the control sees them."""
+        found = []
+        for call in self.calls:
+            if call[0] == 'setAnimations':
+                for _, spec in call[1]:
+                    if 'effect=zoom' in spec:
+                        f = dict(p.split('=', 1) for p in spec.split() if '=' in p)
+                        found.append((float(f['start']), float(f['end']), f['center']))
+        return found
+
+    def last(self):
+        """The animations of the last setAnimations call, parsed."""
+        call = [c for c in self.calls if c[0] == 'setAnimations'][-1]
+        return [dict(p.split('=', 1) for p in spec.split() if '=' in p) for _, spec in call[1]]
+
+    def net_zoom(self):
+        """(start, end) of the last zooms set, chained legs combined, to 2 places."""
+        legs = [f for f in self.last() if f['effect'] == 'zoom']
+        start, end = float(legs[0]['start']), float(legs[0]['end'])
+        for f in legs[1:]:
+            start, end = start * float(f['start']) / 100, end * float(f['end']) / 100
+        return round(start, 2), round(end, 2)
+
+
+
+class KenBurns(NoProxy):
+    def viewer(self, kenburns=True, playing=True, height='1080', zoom=110):
+        assets = api.ImmichClient().search_page(size=2)[0]
+        assets[0]['ratio'] = 16 / 9
+        window = make_viewer(assets)
+        self.window = window
+        window.playing = playing
+        controls = {}
+        with mock.patch.object(window, 'getControl', lambda i: controls.setdefault(i, Recorder())), \
+                mock.patch.object(xbmc, 'getInfoLabel', lambda s: height if s == 'System.ScreenHeight' else ''), \
+                mock.patch.object(kodi, 'setting_bool', lambda k: kenburns if k == 'kenburns' else False), \
+                mock.patch.object(kodi, 'setting_int', lambda k: {'slide_time': 5, 'zoom': zoom}.get(k, 0)):
+            window.setup()
+            window.display(0)
+        main = window.layers[0][2] if window.prepared.get(0, (0, True))[1] else window.layers[0][3]
+        return window.main or main
+
+    def test_photo_decoded_at_largest_frame(self):
+        main = self.viewer()
+        names = [c[0] for c in main.calls]
+        self.assertIn(('setWidth', 2112), main.calls)
+        self.assertIn(('setHeight', 1188), main.calls)
+        loaded = [i for i, c in enumerate(main.calls) if c[0] == 'setImage' and c[1]]
+        self.assertTrue(loaded and names.index('setWidth') < loaded[0])
+
+    def test_zoom_only_shrinks(self):
+        main = self.viewer()
+        self.assertEqual(sorted(main.net_zoom()), [round(100 / 1.1, 2), 100.0])
+        cx, cy = (int(v) for v in main.last()[0]['center'].split(','))
+        self.assertIn(('setPosition', round(cx * (1 - 1.1)), round(cy * (1 - 1.1))), main.calls)
+
+    def test_still_photo_fills_screen(self):
+        main = self.viewer(playing=False)
+        self.assertEqual(main.zooms()[-1:], [(round(100 / 1.1, 3), round(100 / 1.1, 3), '960,540')])
+        self.assertIn(('setPosition', -96, -54), main.calls)
+
+    def test_4k_interface_outsizes_too(self):
+        main = self.viewer(height='2160')
+        self.assertIn(('setWidth', 2112), main.calls)
+        self.assertEqual(sorted(main.net_zoom()), [round(100 / 1.1, 2), 100.0])
+
+    def test_off_leaves_controls_alone(self):
+        main = self.viewer(kenburns=False)
+        self.assertFalse([c for c in main.calls if c[0] in ('setWidth', 'setHeight', 'setPosition')])
+        self.assertEqual(main.zooms(), [])
+
 
 
 class SignIn(unittest.TestCase):

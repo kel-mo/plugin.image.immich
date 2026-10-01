@@ -78,6 +78,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.fade = max(int(kodi.setting_number('fade_time') * 1000), 200)
         self.kenburns = kodi.setting_bool('kenburns')
         self.zoom = min(max(kodi.setting_int('zoom'), 100), 125)
+        self.scale = self.zoom / 100.0 if self.kenburns else 1.0   # how far photo controls outsize the screen
         self.size = 'preview'
         if kodi.setting_bool('hires'):
             try:
@@ -118,6 +119,9 @@ class Viewer(xbmcgui.WindowXMLDialog):
         url = self.client.thumb_url(asset['id'], self.photo_size(asset))
         for control in (back, cover, fit):          # Kodi shows the old texture until the new one loads
             control.setImage('')
+        if self.scale > 1:
+            for control in (cover, fit):            # Kodi decodes to the control's size
+                self.outsize(control)
         self.monitor.waitForAbort(0.05)
         full = abs(asset['ratio'] - SCREEN) < 0.3
         if full:
@@ -199,6 +203,9 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.main = main if asset['image'] else None
         if self.kenburns and self.playing and asset['image']:
             self.pan_zoom(main, fade)
+        elif self.scale > 1:
+            self.outsize(main)
+            main.setAnimations([anim('zoom', start=self.shrink(100), end=self.shrink(100), center='960,540', time=0)])
         else:
             main.setAnimations([])
         group.setAnimations([anim('fade', start=0, end=100, time=fade, tween='sine', easing='inout')])
@@ -217,15 +224,27 @@ class Viewer(xbmcgui.WindowXMLDialog):
     def pan_zoom(self, main, fade):
         """Slow zoom in or out around a random focal point, spanning the fades on both ends."""
         start, end = (100, self.zoom) if random.random() < 0.6 else (self.zoom, 100)
+        cx, cy = random.randint(480, 1440), random.randint(270, 810)
+        if self.scale > 1:
+            self.outsize(main, cx, cy)
         self.kb = {'ctrl': main, 'start': start, 'end': end, 't0': time.time(),
-                   'center': '{},{}'.format(random.randint(480, 1440), random.randint(270, 810)),
-                   'time': int((self.stay * 1000 + 2 * fade) * 1.1)}
+                   'center': '{},{}'.format(cx, cy), 'time': int((self.stay * 1000 + 2 * fade) * 1.1)}
         self.zoom_to(self.kb['start'], self.kb['time'])
+
+    def outsize(self, control, cx=960, cy=540):
+        """The screen scaled by the zoom around (cx, cy): the photo is decoded that big and only ever shrunk."""
+        control.setPosition(round(cx * (1 - self.scale)), round(cy * (1 - self.scale)))
+        control.setWidth(round(1920 * self.scale))
+        control.setHeight(round(1080 * self.scale))
+
+    def shrink(self, percent):
+        """An on-screen zoom as a zoom of the outsized control."""
+        return round(percent / self.scale, 3)
 
     def zoom_to(self, start, ms):
         kb = self.kb
-        kb['ctrl'].setAnimations([anim('zoom', start=round(start, 3), end=kb['end'], center=kb['center'],
-                                       time=int(ms), tween='linear')])
+        kb['ctrl'].setAnimations([anim('zoom', start=self.shrink(start), end=self.shrink(kb['end']),
+                                       center=kb['center'], time=int(ms), tween='linear')])
 
     def freeze(self):
         """Kodi can't pause an animation, so hold it at where the linear zoom has got to."""
@@ -235,7 +254,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         done = min((time.time() - kb['t0']) * 1000 / max(kb['time'], 1), 1.0)
         kb['start'] += (kb['end'] - kb['start']) * done
         kb['time'] *= 1 - done
-        kb['ctrl'].setAnimations([anim('zoom', start=round(kb['start'], 3), end=round(kb['start'], 3),
+        kb['ctrl'].setAnimations([anim('zoom', start=self.shrink(kb['start']), end=self.shrink(kb['start']),
                                        center=kb['center'], time=0)])
 
     def thaw(self):
