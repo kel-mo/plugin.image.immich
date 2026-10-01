@@ -319,6 +319,28 @@ class Recorder:
             start, end = start * float(f['start']) / 100, end * float(f['end']) / 100
         return round(start, 2), round(end, 2)
 
+    def net_slide(self):
+        """((x, y) start, (x, y) end) of the last slides set, chained legs added, to 2 places."""
+        legs = [[tuple(float(n) for n in f[k].split(',')) for k in ('start', 'end')]
+                for f in self.last() if f['effect'] == 'slide']
+        if not legs:
+            return None
+        (sx, sy), (ex, ey) = legs[0]
+        for (ax, ay), (bx, by) in legs[1:]:
+            sx, sy, ex, ey = sx + ax, sy + ay, ex + bx, ey + by
+        return (round(sx, 2), round(sy, 2)), (round(ex, 2), round(ey, 2))
+
+    def slides(self):
+        """(start, end, tween, easing, time) of each slide animation set."""
+        found = []
+        for call in self.calls:
+            if call[0] == 'setAnimations':
+                for _, spec in call[1]:
+                    if 'effect=slide' in spec:
+                        f = dict(p.split('=', 1) for p in spec.split() if '=' in p)
+                        pair = lambda v: tuple(float(n) for n in v.split(','))
+                        found.append((pair(f['start']), pair(f['end']), f.get('tween'), f.get('easing'), f['time']))
+        return found
 
 
 class KenBurns(NoProxy):
@@ -369,15 +391,63 @@ class KenBurns(NoProxy):
         self.assertFalse([c for c in main.calls if c[0] in ('setWidth', 'setHeight', 'setPosition')])
         self.assertEqual(main.zooms(), [])
 
+    def test_portrait_fits_over_backdrop(self):
+        main = self.viewer(ratio=0.75)
+        back = self.window.layers[0][1]
+        self.assertIs(main, self.window.layers[0][3])
+        self.assertTrue([c for c in back.calls if c[0] == 'setImage' and c[1]])
+        self.assertIsNone(main.net_slide())
+        self.assertEqual(sorted(main.net_zoom()), [round(100 / 1.1, 2), 100.0])
+
+    def test_three_two_fits_over_backdrop(self):
+        main = self.viewer(ratio=1.5)
+        self.assertIs(main, self.window.layers[0][3])
+
+    def test_short_panorama_fits(self):
+        main = self.viewer(height='2160', ratio=3.92, size=(4000, 1020), hires=True)
+        self.assertIs(main, self.window.layers[0][3])
+        self.assertIsNone(main.net_slide())
+
+    def test_panorama_pans_sideways(self):
+        main = self.viewer(ratio=3.92)
+        self.assertIn(('setWidth', 4657), main.calls)
+        (x0, y0), (_, y1) = main.net_slide()
+        self.assertEqual((abs(x0), y0, y1), (round(0.015 * 1920 * 9.6 / 2, 2), 0.0, 0.0))
+
+    def test_four_three_keeps_zooming(self):
+        main = self.viewer(ratio=4 / 3)
+        self.assertEqual(main.slides(), [])
+        self.assertEqual(sorted(main.net_zoom()), [round(100 / 1.1, 2), 100.0])
+
+    def test_paused_pan_photo_shows_centre(self):
+        main = self.viewer(ratio=3.92, playing=False)
+        self.assertEqual(main.slides(), [])
+        self.assertEqual(main.zooms()[-1:], [(round(100 / 1.1, 3), round(100 / 1.1, 3), '960,540')])
+
+    def test_pan_holds_where_it_got_to(self):
+        main = self.viewer(ratio=3.92)
+        kb = self.window.kb
+        kb['t0'] -= kb['time'] / 2000.0                     # half way through
+        self.window.freeze()
+        self.assertTrue(main.net_slide(), 'no pan held')
+        (x0, _), (x1, _) = main.net_slide()
+        done = viewer.ease(0.5, 'skew')                     # share of the way at half the time
+        (d0, _), (d1, _) = self.window.kb['pan']
+        self.assertEqual((round(x0, 1), round(x1, 1)), (round(d0 + (d1 - d0) * done, 1),) * 2)
+        zoom = main.net_zoom()
+        self.assertAlmostEqual(zoom[0], 100 * (1 + 0.1 * done) / 1.1, delta=0.05)
+        self.assertEqual(zoom[0], zoom[1])
+
     def test_motion_rises_fast_and_settles_slowly(self):
-        main = self.viewer()
-        legs = [f for f in main.last() if f['effect'] == 'zoom']
-        ms = self.window.kb['time']
-        self.assertEqual([(f.get('tween'), f.get('easing')) for f in legs], [('sine', 'in'), ('sine', 'out')])
-        self.assertEqual((int(legs[0]['time']), int(legs[1]['delay']), int(legs[1]['time'])),
-                         (round(ms * 0.3), round(ms * 0.3), ms - round(ms * 0.3)))
-        z0, z1 = float(legs[0]['start']), float(legs[0]['end']) * float(legs[1]['end']) / 100
-        self.assertAlmostEqual((float(legs[0]['end']) - z0) / (z1 - z0), 0.3, delta=0.01)
+        for ratio in (16 / 9, 3.92):                        # zoom, then pan
+            main = self.viewer(ratio=ratio)
+            legs = [f for f in main.last() if f['effect'] == 'zoom']
+            ms = self.window.kb['time']
+            self.assertEqual([(f.get('tween'), f.get('easing')) for f in legs], [('sine', 'in'), ('sine', 'out')])
+            self.assertEqual((int(legs[0]['time']), int(legs[1]['delay']), int(legs[1]['time'])),
+                             (round(ms * 0.3), round(ms * 0.3), ms - round(ms * 0.3)))
+            z0, z1 = float(legs[0]['start']), float(legs[0]['end']) * float(legs[1]['end']) / 100
+            self.assertAlmostEqual((float(legs[0]['end']) - z0) / (z1 - z0), 0.3, delta=0.01)
 
     def test_zoom_setting_capped(self):
         self.viewer(zoom=125)
@@ -387,6 +457,11 @@ class KenBurns(NoProxy):
         main = self.viewer(height='2160', size=(4000, 2250), hires=True)
         top = 2250 / 2160                                   # one original pixel per screen pixel
         self.assertEqual(sorted(main.net_zoom()), [round(100 / 1.1, 2), round(100 * top / 1.1, 2)])
+
+    def test_panorama_stops_at_original_pixels(self):
+        main = self.viewer(height='2160', ratio=3.92, size=(12672, 2200), hires=True)
+        self.assertEqual(sorted(main.net_zoom()), [round(100 / 1.1, 2), round(100 * (2200 / 2160) / 1.1, 2)])
+        self.assertTrue(main.net_slide())
 
     def test_preview_limits_zoom(self):
         main = self.viewer(height='2160', ratio=4 / 3, size=(4080, 3060))
@@ -404,13 +479,13 @@ class KenBurns(NoProxy):
         self.assertEqual((f['time'], f['delay']), ('2000', '600'))
 
     def test_resume_settles(self):
-        main = self.viewer()
+        main = self.viewer(ratio=3.92)
         kb = self.window.kb
         kb['t0'] -= kb['time'] / 4000.0                     # a quarter through
         self.window.freeze()
         left = kb['time']
         self.window.thaw()
-        legs = [f for f in main.last() if f['effect'] == 'zoom']
+        legs = [f for f in main.last() if f['effect'] in ('zoom', 'slide')]
         self.assertEqual({(f['tween'], f['easing'], int(f['time'])) for f in legs}, {('sine', 'out', int(left))})
         self.assertFalse([f for f in legs if 'delay' in f])
 

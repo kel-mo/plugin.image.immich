@@ -17,6 +17,9 @@ from . import items, kodi, proxy, thumbhash
 from .api import ApiError, ImmichClient, from_asset
 
 SCREEN = 1920 / 1080
+FILL_SLACK = 0.1                         # how far from 16:9 a photo may be and still fill the screen; others sit on the backdrop
+PAN_WIDE = 2.4                           # panoramas this wide pan across the screen instead
+PAN_SPEED = 0.015                        # screen widths a second
 LOAD_WAIT = 10                           # seconds a photo stays up waiting for the next to arrive
 AHEAD = 3                                # photos whose details are fetched in the background
 EASE_PEAK = 0.3                          # motion is fastest here: quick to start, long to settle
@@ -158,12 +161,19 @@ class Viewer(xbmcgui.WindowXMLDialog):
         url = self.client.thumb_url(asset['id'], size)
         for control in (back, cover, fit):          # Kodi shows the old texture until the new one loads
             control.setImage('')
-        if self.scale > 1:
+        pan = self.pans(asset)
+        if pan:
+            self.span(fit, asset['ratio'])
+        elif self.scale > 1:
             for control in (cover, fit):            # Kodi decodes to the control's size
                 self.outsize(control)
         self.monitor.waitForAbort(0.05)
-        full = abs(asset['ratio'] - SCREEN) < 0.3
-        if full:
+        full = abs(asset['ratio'] - SCREEN) < FILL_SLACK and not pan
+        if pan:
+            cover.setImage('')
+            back.setImage('')
+            fit.setImage(url, False)
+        elif full:
             fit.setImage('')
             back.setImage('')
             cover.setImage(url, False)
@@ -267,6 +277,9 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.main = main if asset['image'] else None
         if self.kenburns and self.playing and asset['image']:
             self.pan_zoom(main, fade)
+        elif self.pans(asset):
+            rest = self.shrink(100)
+            main.setAnimations([anim('zoom', start=rest, end=rest, center='960,540', time=0)])
         elif self.scale > 1:
             self.outsize(main)
             main.setAnimations([anim('zoom', start=self.shrink(100), end=self.shrink(100), center='960,540', time=0)])
@@ -289,6 +302,8 @@ class Viewer(xbmcgui.WindowXMLDialog):
 
     def pan_zoom(self, main, fade):
         """Slow zoom in or out around a random focal point, spanning the fades on both ends."""
+        if self.pans(self.assets[self.index]):
+            return self.pan(main, fade)
         top = 100 * self.top(self.assets[self.index], cover=any(main is layer[2] for layer in self.layers))
         start, end = (100, top) if random.random() < 0.6 else (top, 100)
         cx, cy = random.randint(480, 1440), random.randint(270, 810)
@@ -297,6 +312,13 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.kb = {'ctrl': main, 'zoom': (start, end), 'center': '{},{}'.format(cx, cy), 'f': 0.0,
                    'easing': 'skew', 't0': time.time(), 'time': int((self.stay * 1000 + 2 * fade) * 1.1)}
         self.move()
+
+    def pans(self, asset):
+        """Panoramas fill the screen and pan across, if the original is tall enough; the rest sit on the backdrop."""
+        if not (self.kenburns and asset['image'] and asset['ratio'] >= PAN_WIDE):
+            return False
+        tall = self.source_height(asset)
+        return tall is None or tall >= gui_height()
 
     def source_height(self, asset):
         """The shown image's height in pixels, or None when unknown."""
@@ -316,10 +338,34 @@ class Viewer(xbmcgui.WindowXMLDialog):
         shown = (cover_size if cover else fit_size)(asset['ratio'])[1] * gui_height() / 1080.0
         return min(want, max(1.0, h / shown))
 
+    def span(self, control, ratio):
+        """The whole photo cropped to fill the screen, at the pan's largest: decoded that big, only ever shrunk."""
+        w, h = cover_size(ratio)
+        control.setPosition(round(960 - w * self.scale / 2), round(540 - h * self.scale / 2))
+        control.setWidth(round(w * self.scale))
+        control.setHeight(round(h * self.scale))
+
+    def pan(self, main, fade):
+        """One eased pan at a calm speed across what cropping hides, with a gentle zoom."""
+        w, h = cover_size(self.assets[self.index]['ratio'])
+        ms = int((self.stay * 1000 + 2 * fade) * 1.2)
+        reach = PAN_SPEED * 1920 * ms / 2000.0            # half the travel
+        dx, dy = min(max(w - 1920, 0) / 2, reach), min(max(h - 1080, 0) / 2, reach)
+        sign = random.choice((-1, 1))
+        self.kb = {'ctrl': main, 'pan': ((-sign * dx, -sign * dy), (sign * dx, sign * dy)), 'center': '960,540',
+                   'top': self.top(self.assets[self.index], cover=True),
+                   'f': 0.0, 'easing': 'skew', 't0': time.time(), 'time': ms}
+        self.move()
+
     def state(self, f):
-        """The control's zoom at share f of the way."""
-        start, end = self.kb['zoom']
-        return self.shrink(start + (end - start) * f)
+        """The control's zoom, and slide when panning, at share f of the way."""
+        kb = self.kb
+        if 'pan' in kb:
+            (x0, y0), (x1, y1) = kb['pan']
+            return (self.shrink(100 * (1 + (kb['top'] - 1) * f)),
+                    (round(x0 + (x1 - x0) * f, 3), round(y0 + (y1 - y0) * f, 3)))
+        start, end = kb['zoom']
+        return self.shrink(start + (end - start) * f), None
 
     def move(self):
         """The rest of the way: a fresh start rises fast and settles slowly, a resume just settles."""
@@ -331,12 +377,17 @@ class Viewer(xbmcgui.WindowXMLDialog):
             legs = [(kb['f'], 1.0, 0, kb['time'], kb['easing'])]
         anims = []
         for n, (a, b, delay, ms, easing) in enumerate(legs):
-            za, zb = self.state(a), self.state(b)
+            (za, sa), (zb, sb) = self.state(a), self.state(b)
             if n:                                   # later legs carry on from where the first stopped
                 za, zb = 100, round(100 * zb / za, 3)
+                if sb is not None:
+                    sa, sb = (0, 0), (round(sb[0] - sa[0], 3), round(sb[1] - sa[1], 3))
             extra = {'delay': delay} if delay else {}
             anims.append(anim('zoom', start=za, end=zb, center=kb['center'], time=ms, tween='sine', easing=easing,
                               **extra))
+            if sb is not None:
+                anims.append(anim('slide', start='{},{}'.format(*sa), end='{},{}'.format(*sb), time=ms,
+                                  tween='sine', easing=easing, **extra))
         kb['ctrl'].setAnimations(anims)
 
     def outsize(self, control, cx=960, cy=540):
@@ -358,8 +409,11 @@ class Viewer(xbmcgui.WindowXMLDialog):
         kb['f'] += (1 - kb['f']) * ease(done, kb['easing'])
         kb['time'] *= 1 - done
         kb['easing'] = 'out'                        # carries on decelerating from here
-        zoom = self.state(kb['f'])
-        kb['ctrl'].setAnimations([anim('zoom', start=zoom, end=zoom, center=kb['center'], time=0)])
+        zoom, slide = self.state(kb['f'])
+        held = [anim('zoom', start=zoom, end=zoom, center=kb['center'], time=0)]
+        if slide is not None:
+            held.append(anim('slide', start='{},{}'.format(*slide), end='{},{}'.format(*slide), time=0))
+        kb['ctrl'].setAnimations(held)
 
     def thaw(self):
         if self.kb is None:
