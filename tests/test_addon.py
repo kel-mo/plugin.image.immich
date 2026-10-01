@@ -557,6 +557,15 @@ class Loading(NoProxy):
         self.assertEqual({a['id'] for a in window.assets[1:4]} - set(window.raws), set())
 
 
+class Skin(unittest.TestCase):
+    def test_photos_keep_subpixel_positions(self):
+        import xml.etree.ElementTree as ET
+        root = ET.parse(os.path.join(ROOT, 'resources', 'skins', 'default', '1080i', 'script-immich-viewer.xml'))
+        photos = {c.get('id'): c.find('texture') for c in root.iter('control') if c.get('id') in ('102', '103', '202', '203')}
+        self.assertEqual({i: t is not None and t.get('subpixel') for i, t in photos.items()},
+                         {'102': 'true', '103': 'true', '202': 'true', '203': 'true'})
+
+
 class SignIn(unittest.TestCase):
     def test_api_key_hidden(self):
         typed, answers = [], [MOCK, mock_immich.KEY]

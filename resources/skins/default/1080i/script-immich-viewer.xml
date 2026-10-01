@@ -23,11 +23,13 @@
         <width>1920</width>
         <height>1080</height>
         <aspectratio>scale</aspectratio>
+        <texture subpixel="true"/>
       </control>
       <control type="image" id="103">
         <width>1920</width>
         <height>1080</height>
         <aspectratio>keep</aspectratio>
+        <texture subpixel="true"/>
       </control>
     </control>
     <control type="group" id="200">
@@ -41,11 +43,13 @@
         <width>1920</width>
         <height>1080</height>
         <aspectratio>scale</aspectratio>
+        <texture subpixel="true"/>
       </control>
       <control type="image" id="203">
         <width>1920</width>
         <height>1080</height>
         <aspectratio>keep</aspectratio>
+        <texture subpixel="true"/>
       </control>
     </control>
 
