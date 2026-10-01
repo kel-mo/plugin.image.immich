@@ -10,7 +10,7 @@ import unittest
 from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest import mock
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRATCH = tempfile.mkdtemp(prefix='immich-tests-')
@@ -32,6 +32,12 @@ class Quiet(mock_immich.Handler):
     def log_message(self, fmt, *args):
         pass
 
+    def do_HEAD(self):
+        """Headers only, as Immich answers the HEAD Kodi sends before an image."""
+        self.send_response(200)
+        self.send_header('Content-Type', 'image/png')
+        self.send_header('Content-Length', '0')
+        self.end_headers()
 
 
 class Broken(BaseHTTPRequestHandler):
@@ -202,6 +208,35 @@ class Proxy(unittest.TestCase):
         with urlopen(f'{self.base}/api/assets/{self.asset}/thumbnail', timeout=10) as resp:
             self.assertEqual((resp.status, resp.read(8)), (200, b'\x89PNG\r\n\x1a\n'))
 
+    def done(self, since):
+        entries = [e.rpartition('@') for e in xbmcgui.Window(10000).getProperty(proxy.DONE).split()]
+        return [name for name, _, at in entries if float(at) >= since]
+
+    def test_finished_photo_announced(self):
+        since = time.time()
+        url = f'{self.base}/api/assets/{self.asset}/thumbnail?size=fullsize'
+        urlopen(Request(url, method='HEAD'), timeout=10).close()
+        time.sleep(0.2)
+        self.assertEqual(self.done(since), [])
+        with urlopen(url, timeout=10) as resp:
+            resp.read()
+        time.sleep(0.2)
+        self.assertEqual(self.done(since), [f'{self.asset}:fullsize'])
+
+    def test_cut_off_photo_not_announced(self):
+        settings = {'server_url': BROKEN, 'api_key': 'k'}
+        with mock.patch.object(kodi, 'fresh_setting', side_effect=settings.get):
+            self.monitor.onSettingsChanged()
+        self.addCleanup(self.monitor.onSettingsChanged)
+        since = time.time()
+        with urlopen(f'{self.base}/api/assets/{self.asset}/thumbnail?size=fullsize', timeout=10) as resp:
+            try:
+                resp.read()
+            except IncompleteRead:
+                pass
+        time.sleep(0.2)
+        self.assertEqual(self.done(since), [])
+
     def test_upstream_cut_off(self):
         errors = []
         settings = {'server_url': BROKEN, 'api_key': 'k'}
@@ -358,6 +393,64 @@ class KenBurns(NoProxy):
         legs = [f for f in main.last() if f['effect'] == 'zoom']
         self.assertEqual({(f['tween'], f['easing'], int(f['time'])) for f in legs}, {('sine', 'out', int(left))})
         self.assertFalse([f for f in legs if 'delay' in f])
+
+
+class Loading(NoProxy):
+    def viewer(self):
+        window = make_viewer(api.ImmichClient().search_page(size=5)[0])
+        window.getControl = lambda i: Recorder()
+        with mock.patch.object(kodi, 'setting_bool', lambda k: k == 'hires'), \
+                mock.patch.object(window.client, 'key_info', lambda: {'permissions': ['all']}):
+            window.setup()
+        return window
+
+    def announce(self, token, at):
+        xbmcgui.Window(10000).setProperty(proxy.DONE, f'{token}@{at}')
+
+    def test_next_photo_waited_for(self):
+        window = self.viewer()
+        self.announce('', 0)
+        window.prepare(1, 1)
+        token = f"{window.assets[1]['id']}:fullsize"
+        now = time.time()
+        self.assertFalse(window.ready(1, now))
+        self.announce(token, now)
+        self.assertTrue(window.ready(1, now))
+
+    def test_old_announcement_ignored(self):
+        window = self.viewer()
+        token = f"{window.assets[1]['id']}:fullsize"
+        self.announce(token, time.time() - 60)
+        window.prepare(1, 1)
+        self.assertFalse(window.ready(1, time.time()))
+
+    def test_gives_up_waiting(self):
+        window = self.viewer()
+        self.announce('', 0)
+        window.prepare(1, 1)
+        self.assertTrue(window.ready(1, time.time() + viewer.LOAD_WAIT + 1))
+
+    def test_slideshow_holds_until_loaded(self):
+        window = self.viewer()
+        self.announce('', 0)
+        shown = []
+        window.display = lambda index, fade=None: (shown.append(index), setattr(window, 'shown', 0),
+                                                   setattr(window, 'next_at', 1), setattr(window, 'preload_at', None))
+        ticks = []
+
+        class Ticking(xbmc.Monitor):
+            def waitForAbort(self, t=0):
+                ticks.append(t)
+                if len(ticks) == 5:
+                    window.actions.append(10)       # close
+                return False
+
+        window.monitor = Ticking()
+        window.prepared[1] = (1, True)
+        window.waiting[1] = (f"{window.assets[1]['id']}:fullsize", time.time())
+        with mock.patch.object(window, 'setup', lambda: None), mock.patch.object(window, 'prepare', lambda *a: None):
+            window.run()
+        self.assertEqual(shown, [0])                # the first photo only: the next never arrived
 
 
 

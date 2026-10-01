@@ -12,10 +12,11 @@ import xbmcaddon
 import xbmcgui
 import xbmcvfs
 
-from . import items, kodi, thumbhash
+from . import items, kodi, proxy, thumbhash
 from .api import ApiError, ImmichClient
 
 SCREEN = 1920 / 1080
+LOAD_WAIT = 10                           # seconds a photo stays up waiting for the next to arrive
 EASE_PEAK = 0.3                          # motion is fastest here: quick to start, long to settle
 CLOSE = {9, 10, 13, 92}                  # parent dir, previous menu, stop, back
 PAUSE = {7, 12, 79, 229}                 # select, pause, play, play/pause
@@ -115,6 +116,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
             layer[0].setAnimations([anim('fade', start=0, end=0, time=0)])
         self.shown = None                   # layer on screen
         self.prepared = {}                  # layer -> (asset index, fills screen)
+        self.waiting = {}                   # layer -> (photo the proxy will announce, since when)
         self.player = xbmc.Player()
         self.video = None
         self.next_at = None
@@ -131,7 +133,8 @@ class Viewer(xbmcgui.WindowXMLDialog):
         asset = self.assets[index]
         group, back, cover, fit = self.layers[layer]
         group.setAnimations([anim('fade', start=0, end=0, time=0)])   # may still be fading out
-        url = self.client.thumb_url(asset['id'], self.photo_size(asset))
+        size = self.photo_size(asset)
+        url = self.client.thumb_url(asset['id'], size)
         for control in (back, cover, fit):          # Kodi shows the old texture until the new one loads
             control.setImage('')
         if self.scale > 1:
@@ -148,6 +151,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
             back.setImage(self.backdrop(asset), False)
             fit.setImage(url, False)
         self.prepared[layer] = (index, full)
+        self.waiting[layer] = ('{}:{}'.format(asset['id'], size), time.time())
 
     def refill(self):
         try:
@@ -186,6 +190,17 @@ class Viewer(xbmcgui.WindowXMLDialog):
                 kodi.log('asset lookup failed: {}'.format(e), xbmc.LOGWARNING)
                 return None
         return self.raws[asset['id']]
+
+    def ready(self, layer, now):
+        """Whether the photo prepared in layer has arrived, or has been waited on long enough."""
+        name, since = self.waiting.get(layer, (None, 0))
+        if name is None or now - since >= LOAD_WAIT:
+            return True
+        for entry in xbmcgui.Window(10000).getProperty(proxy.DONE).split():
+            done, _, at = entry.rpartition('@')
+            if done == name and float(at) >= since - 1:
+                return True
+        return False
 
     def photo_size(self, asset):
         """fullsize redirects to web-safe originals; Kodi may not decode AVIF ones or turn rotated ones upright."""
@@ -226,6 +241,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         group.setAnimations([anim('fade', start=0, end=100, time=fade, tween='sine', easing='inout')])
         self.shown = layer
         self.prepared.pop(layer, None)
+        self.waiting.pop(layer, None)
         self.shown_at = time.time()
         self.preload_at = self.shown_at + fade / 1000.0 + 0.3
         self.next_at = self.shown_at + self.stay + fade / 1000.0
@@ -405,7 +421,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
             now = time.time()
             if self.video:
                 self.poll_video()
-            elif self.playing and self.next_at and now >= self.next_at:
+            elif self.playing and self.next_at and now >= self.next_at and self.ready(self.free_layer(), now):
                 self.display(self.index + 1)
             if self.shown is not None and self.preload_at and now >= self.preload_at:
                 self.preload_at = None

@@ -6,6 +6,7 @@ import re
 import socket
 import ssl
 import threading
+import time
 from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError, URLError
@@ -19,8 +20,12 @@ from . import kodi
 PORT = 52283                             # fixed so Kodi's texture cache keeps its addresses
 TRIES = 10
 PROPERTY = '{}.proxy'.format(kodi.ADDON_ID)   # Home window property holding the port
+DONE = '{}.done'.format(kodi.ADDON_ID)       # Home window property: photos fully sent, as id:size@time
+DONE_KEEP = 8
+PHOTO = re.compile(r'/api/assets/([0-9a-f-]+)/thumbnail$')
 TIMEOUT = 30
 CHUNK = 64 * 1024
+_done_lock = threading.Lock()
 ALLOWED = re.compile(r'/api/(assets/[0-9a-f-]+/(thumbnail|original|video/playback)|people/[0-9a-f-]+/thumbnail)$')
 REQUEST_HEADERS = ('Range', 'If-None-Match', 'If-Modified-Since')
 RESPONSE_HEADERS = ('Content-Type', 'Content-Length', 'Content-Range', 'Accept-Ranges', 'Cache-Control', 'ETag',
@@ -86,7 +91,22 @@ class Handler(BaseHTTPRequestHandler):
                             break
                         self.wfile.write(data)
                 except (IncompleteRead, OSError):
-                    pass                        # Kodi hangs up when it seeks, or the server drops out
+                    return                      # Kodi hangs up when it seeks, or the server drops out
+                if resp.status in (200, 206):
+                    announce(path, self.path)
+
+
+def announce(path, full):
+    """Tell the viewer a photo has been sent in full, so it can fade it in."""
+    found = PHOTO.match(path)
+    if not found:
+        return
+    size = re.search(r'[?&]size=([a-z]+)', full)
+    name = '{}:{}'.format(found.group(1), size.group(1) if size else 'thumbnail')
+    with _done_lock:
+        window = xbmcgui.Window(10000)
+        kept = [e for e in window.getProperty(DONE).split() if e.rpartition('@')[0] != name]
+        window.setProperty(DONE, ' '.join(kept[-(DONE_KEEP - 1):] + ['{}@{:.3f}'.format(name, time.time())]))
 
 
 def start():
