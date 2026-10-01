@@ -106,6 +106,42 @@ def tearDownModule():
     shutil.rmtree(SCRATCH, ignore_errors=True)
 
 
+def png_alpha(path):
+    """Rows of alpha values from an 8-bit RGBA PNG, without PIL."""
+    import struct
+    import zlib
+    data = open(path, 'rb').read()
+    pos, chunks, w = 8, b'', 0
+    while pos < len(data):
+        size, kind = struct.unpack('>I4s', data[pos:pos + 8])
+        body = data[pos + 8:pos + 8 + size]
+        if kind == b'IHDR':
+            w, _, depth, colour = struct.unpack('>IIBB', body[:10])
+            assert (depth, colour) == (8, 6), 'expects 8-bit RGBA'
+        elif kind == b'IDAT':
+            chunks += body
+        pos += 12 + size
+    raw, stride, rows, prev = zlib.decompress(chunks), w * 4, [], bytearray(w * 4)
+    for i in range(0, len(raw), stride + 1):
+        kind, line = raw[i], bytearray(raw[i + 1:i + 1 + stride])
+        for x in range(stride):
+            a = line[x - 4] if x >= 4 else 0
+            b, c = prev[x], prev[x - 4] if x >= 4 else 0
+            if kind == 1:
+                line[x] = (line[x] + a) & 255
+            elif kind == 2:
+                line[x] = (line[x] + b) & 255
+            elif kind == 3:
+                line[x] = (line[x] + (a + b) // 2) & 255
+            elif kind == 4:
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                line[x] = (line[x] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+        rows.append(line[3::4])
+        prev = line
+    return rows
+
+
 def make_viewer(assets):
     return viewer.Viewer('script-immich-viewer.xml', ROOT, 'default', '1080i',
                          client=api.ImmichClient(), assets=assets, start=0, autoplay=True)
@@ -564,6 +600,18 @@ class Skin(unittest.TestCase):
         photos = {c.get('id'): c.find('texture') for c in root.iter('control') if c.get('id') in ('102', '103', '202', '203')}
         self.assertEqual({i: t is not None and t.get('subpixel') for i, t in photos.items()},
                          {'102': 'true', '103': 'true', '202': 'true', '203': 'true'})
+
+    def test_photo_edges_feathered(self):
+        import xml.etree.ElementTree as ET
+        skin = os.path.join(ROOT, 'resources', 'skins', 'default')
+        root = ET.parse(os.path.join(skin, '1080i', 'script-immich-viewer.xml'))
+        masks = {c.get('id'): c.find('texture').get('diffuse') for c in root.iter('control')
+                 if c.get('id') in ('102', '103', '202', '203') and c.find('texture') is not None}
+        self.assertEqual(masks, dict.fromkeys(('102', '103', '202', '203'), 'edge.png'))
+        alpha = png_alpha(os.path.join(skin, 'media', 'edge.png'))
+        n = len(alpha)
+        self.assertEqual([alpha[y][x] for x, y in ((0, 0), (n // 2, 0), (n - 1, n // 2), (1, 1), (n // 2, n // 2))],
+                         [0, 0, 0, 255, 255])
 
 
 class SignIn(unittest.TestCase):
