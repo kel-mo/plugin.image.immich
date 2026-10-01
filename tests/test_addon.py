@@ -668,7 +668,7 @@ class Screensaver(NoProxy):
         self.assertEqual(points.get('xbmc.ui.screensaver'), 'screensaver.py')
         self.assertTrue(os.path.exists(os.path.join(ROOT, 'screensaver.py')))
 
-    def run_screensaver(self, source, found):
+    def run_screensaver(self, source, found, query=''):
         from resources.lib import screensaver
         shown, self.asked = [], []
 
@@ -676,6 +676,7 @@ class Screensaver(NoProxy):
             self.asked.append(params)
             return found.get(params['source'], [])
         with mock.patch.object(kodi, 'setting_int', lambda k: source if k == 'screensaver_source' else 0), \
+                mock.patch.object(kodi, 'setting', lambda k: query if k == 'screensaver_query' else ''), \
                 mock.patch.object(plugin, 'source_assets', source_assets), \
                 mock.patch.object(viewer, 'play', lambda client, assets, **kw: shown.append((assets, kw))):
             screensaver.run()
@@ -692,6 +693,17 @@ class Screensaver(NoProxy):
         (assets, kw), = shown
         self.assertEqual([a['id'] for a in assets], ['r'])
         self.assertIsNotNone(kw.get('more'))
+
+    def test_smart_search(self):
+        shown = self.run_screensaver(3, {'search': [{'id': 's', 'image': True}]}, query='beach at sunset')
+        (assets, kw), = shown
+        self.assertEqual(([a['id'] for a in assets], self.asked[0].get('query')), (['s'], 'beach at sunset'))
+        self.assertIsNone(kw.get('more'))
+
+    def test_blank_search_falls_back_to_random(self):
+        shown = self.run_screensaver(3, {'search': [{'id': 's', 'image': True}], 'random': [{'id': 'r', 'image': True}]})
+        (assets, _), = shown
+        self.assertEqual([a['id'] for a in assets], ['r'])
 
     def test_viewer_as_screensaver(self):
         window = make_viewer([])
@@ -723,8 +735,10 @@ class Screensaver(NoProxy):
         labels = [o.get('label') for o in setting.iter('option')]
         with open(os.path.join(ROOT, 'resources', 'language', 'resource.language.en_gb', 'strings.po')) as f:
             po = f.read()
-        self.assertEqual(len(labels), 3)
-        self.assertTrue(all(f'msgctxt "#{n}"' in po for n in labels + [setting.get('label')]))
+        query = next(s for s in ET.parse(os.path.join(ROOT, 'resources', 'settings.xml')).iter('setting')
+                     if s.get('id') == 'screensaver_query')
+        self.assertEqual(len(labels), 4)
+        self.assertTrue(all(f'msgctxt "#{n}"' in po for n in labels + [setting.get('label'), query.get('label')]))
 
 
 class SignIn(unittest.TestCase):

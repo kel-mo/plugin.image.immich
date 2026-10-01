@@ -7,7 +7,7 @@ import xbmc
 from . import kodi, plugin, viewer
 from .api import ApiError, ImmichClient
 
-SOURCES = ('memories', 'random', 'favourites')
+SOURCES = ('memories', 'random', 'favourites', 'search')
 
 
 def photos(client, source, **params):
@@ -18,8 +18,9 @@ def run():
     try:
         client = ImmichClient()
         source = SOURCES[min(max(kodi.setting_int('screensaver_source'), 0), len(SOURCES) - 1)]
-        assets = photos(client, source)
-        if not assets and source != 'random':      # nothing on this day or no favourites
+        query = kodi.setting('screensaver_query').strip()
+        assets = photos(client, source, query=query) if source != 'search' or query else []
+        if not assets and source != 'random':      # nothing on this day, no favourites or no matches
             source, assets = 'random', photos(client, 'random')
     except ApiError as e:
         kodi.log('screensaver: {}'.format(e), xbmc.LOGWARNING)

@@ -248,6 +248,18 @@ msgctxt "#30405"
 msgid "Ken Burns is always on in the screensaver. When there are no photos to show, random ones are used instead."
 msgstr ""
 
+msgctxt "#30406"
+msgid "Smart search"
+msgstr ""
+
+msgctxt "#30407"
+msgid "Search for"
+msgstr ""
+
+msgctxt "#30408"
+msgid "Describe the photos to show, for example: beach at sunset"
+msgstr ""
+
 msgctxt "#30500"
 msgid "Advanced"
 msgstr ""
