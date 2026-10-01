@@ -5,6 +5,7 @@ import os
 import random
 import re
 import shutil
+import threading
 import time
 
 import xbmc
@@ -17,6 +18,7 @@ from .api import ApiError, ImmichClient
 
 SCREEN = 1920 / 1080
 LOAD_WAIT = 10                           # seconds a photo stays up waiting for the next to arrive
+AHEAD = 3                                # photos whose details are fetched in the background
 EASE_PEAK = 0.3                          # motion is fastest here: quick to start, long to settle
 CLOSE = {9, 10, 13, 92}                  # parent dir, previous menu, stop, back
 PAUSE = {7, 12, 79, 229}                 # select, pause, play, play/pause
@@ -117,6 +119,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.shown = None                   # layer on screen
         self.prepared = {}                  # layer -> (asset index, fills screen)
         self.waiting = {}                   # layer -> (photo the proxy will announce, since when)
+        self.ahead = None                   # thread fetching the next photos' details
         self.player = xbmc.Player()
         self.video = None
         self.next_at = None
@@ -202,6 +205,16 @@ class Viewer(xbmcgui.WindowXMLDialog):
                 return True
         return False
 
+    def look_ahead(self):
+        """Fetch the next photos' details in the background, so preparing them doesn't wait on the network."""
+        if self.size != 'fullsize' or (self.ahead and self.ahead.is_alive()):
+            return
+        todo = [a for a in (self.assets[(self.index + k) % len(self.assets)] for k in range(1, AHEAD + 1))
+                if a['image'] and a['id'] not in self.raws and (a.get('mime') is None or a.get('orientation') is None)]
+        if todo:
+            self.ahead = threading.Thread(target=lambda: [self.raw(a) for a in todo], daemon=True)
+            self.ahead.start()
+
     def photo_size(self, asset):
         """fullsize redirects to web-safe originals; Kodi may not decode AVIF ones or turn rotated ones upright."""
         if self.size != 'fullsize' or not asset['image']:
@@ -242,6 +255,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.shown = layer
         self.prepared.pop(layer, None)
         self.waiting.pop(layer, None)
+        self.look_ahead()
         self.shown_at = time.time()
         self.preload_at = self.shown_at + fade / 1000.0 + 0.3
         self.next_at = self.shown_at + self.stay + fade / 1000.0

@@ -452,6 +452,14 @@ class Loading(NoProxy):
             window.run()
         self.assertEqual(shown, [0])                # the first photo only: the next never arrived
 
+    def test_details_fetched_ahead(self):
+        window = self.viewer()
+        for a in window.assets:
+            a['mime'] = a['orientation'] = None     # as memories and timeline months come
+        window.display(0)
+        if window.ahead:
+            window.ahead.join(10)
+        self.assertEqual({a['id'] for a in window.assets[1:4]} - set(window.raws), set())
 
 
 class SignIn(unittest.TestCase):
