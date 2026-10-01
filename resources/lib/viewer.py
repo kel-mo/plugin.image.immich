@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Full-screen viewer: Ken Burns pan and zoom, crossfades, captions and inline video."""
+import math
 import os
 import random
 import re
@@ -15,6 +16,7 @@ from . import items, kodi, thumbhash
 from .api import ApiError, ImmichClient
 
 SCREEN = 1920 / 1080
+EASE_PEAK = 0.3                          # motion is fastest here: quick to start, long to settle
 CLOSE = {9, 10, 13, 92}                  # parent dir, previous menu, stop, back
 PAUSE = {7, 12, 79, 229}                 # select, pause, play, play/pause
 NEXT = {2, 14, 77}                       # right, next item, fast forward
@@ -47,10 +49,23 @@ def skin_slowdown():
     return _slowdown
 
 
+def ease(done, easing):
+    """Kodi's sine tweens at a share of their time; skew is sine in up to EASE_PEAK, then sine out."""
+    if easing == 'out':
+        return math.sin(done * math.pi / 2)
+    if easing == 'skew':
+        p = EASE_PEAK
+        if done <= p:
+            return p * (1 - math.cos(done / p * math.pi / 2))
+        return p + (1 - p) * math.sin((done - p) / (1 - p) * math.pi / 2)
+    return 0.5 - 0.5 * math.cos(done * math.pi)
+
+
 def anim(effect, **attrs):
     attrs.setdefault('condition', 'true')
-    if attrs.get('time'):
-        attrs['time'] = int(attrs['time'] / skin_slowdown())   # real milliseconds on any skin
+    for k in ('time', 'delay'):
+        if attrs.get(k):
+            attrs[k] = int(attrs[k] / skin_slowdown())      # real milliseconds on any skin
     return ('conditional', 'effect={} {}'.format(effect, ' '.join('{}={}'.format(k, v) for k, v in attrs.items())))
 
 
@@ -227,9 +242,32 @@ class Viewer(xbmcgui.WindowXMLDialog):
         cx, cy = random.randint(480, 1440), random.randint(270, 810)
         if self.scale > 1:
             self.outsize(main, cx, cy)
-        self.kb = {'ctrl': main, 'start': start, 'end': end, 't0': time.time(),
-                   'center': '{},{}'.format(cx, cy), 'time': int((self.stay * 1000 + 2 * fade) * 1.1)}
-        self.zoom_to(self.kb['start'], self.kb['time'])
+        self.kb = {'ctrl': main, 'zoom': (start, end), 'center': '{},{}'.format(cx, cy), 'f': 0.0,
+                   'easing': 'skew', 't0': time.time(), 'time': int((self.stay * 1000 + 2 * fade) * 1.1)}
+        self.move()
+
+    def state(self, f):
+        """The control's zoom at share f of the way."""
+        start, end = self.kb['zoom']
+        return self.shrink(start + (end - start) * f)
+
+    def move(self):
+        """The rest of the way: a fresh start rises fast and settles slowly, a resume just settles."""
+        kb = self.kb
+        if kb['easing'] == 'skew':                  # two sine legs whose speeds meet at EASE_PEAK
+            split = round(kb['time'] * EASE_PEAK)
+            legs = [(0.0, EASE_PEAK, 0, split, 'in'), (EASE_PEAK, 1.0, split, kb['time'] - split, 'out')]
+        else:
+            legs = [(kb['f'], 1.0, 0, kb['time'], kb['easing'])]
+        anims = []
+        for n, (a, b, delay, ms, easing) in enumerate(legs):
+            za, zb = self.state(a), self.state(b)
+            if n:                                   # later legs carry on from where the first stopped
+                za, zb = 100, round(100 * zb / za, 3)
+            extra = {'delay': delay} if delay else {}
+            anims.append(anim('zoom', start=za, end=zb, center=kb['center'], time=ms, tween='sine', easing=easing,
+                              **extra))
+        kb['ctrl'].setAnimations(anims)
 
     def outsize(self, control, cx=960, cy=540):
         """The screen scaled by the zoom around (cx, cy): the photo is decoded that big and only ever shrunk."""
@@ -241,21 +279,17 @@ class Viewer(xbmcgui.WindowXMLDialog):
         """An on-screen zoom as a zoom of the outsized control."""
         return round(percent / self.scale, 3)
 
-    def zoom_to(self, start, ms):
-        kb = self.kb
-        kb['ctrl'].setAnimations([anim('zoom', start=self.shrink(start), end=self.shrink(kb['end']),
-                                       center=kb['center'], time=int(ms), tween='linear')])
-
     def freeze(self):
-        """Kodi can't pause an animation, so hold it at where the linear zoom has got to."""
+        """Kodi can't pause an animation, so hold it at where the motion has got to."""
         kb = self.kb
         if not kb:
             return
         done = min((time.time() - kb['t0']) * 1000 / max(kb['time'], 1), 1.0)
-        kb['start'] += (kb['end'] - kb['start']) * done
+        kb['f'] += (1 - kb['f']) * ease(done, kb['easing'])
         kb['time'] *= 1 - done
-        kb['ctrl'].setAnimations([anim('zoom', start=self.shrink(kb['start']), end=self.shrink(kb['start']),
-                                       center=kb['center'], time=0)])
+        kb['easing'] = 'out'                        # carries on decelerating from here
+        zoom = self.state(kb['f'])
+        kb['ctrl'].setAnimations([anim('zoom', start=zoom, end=zoom, center=kb['center'], time=0)])
 
     def thaw(self):
         if self.kb is None:
@@ -264,7 +298,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
             return
         if self.kb['time'] > 0:
             self.kb['t0'] = time.time()
-            self.zoom_to(self.kb['start'], self.kb['time'])
+            self.move()
 
     def show_info(self):
         self.setProperty('immich.captions', 'true' if self.info else 'false')

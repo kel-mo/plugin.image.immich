@@ -332,6 +332,33 @@ class KenBurns(NoProxy):
         self.assertFalse([c for c in main.calls if c[0] in ('setWidth', 'setHeight', 'setPosition')])
         self.assertEqual(main.zooms(), [])
 
+    def test_motion_rises_fast_and_settles_slowly(self):
+        main = self.viewer()
+        legs = [f for f in main.last() if f['effect'] == 'zoom']
+        ms = self.window.kb['time']
+        self.assertEqual([(f.get('tween'), f.get('easing')) for f in legs], [('sine', 'in'), ('sine', 'out')])
+        self.assertEqual((int(legs[0]['time']), int(legs[1]['delay']), int(legs[1]['time'])),
+                         (round(ms * 0.3), round(ms * 0.3), ms - round(ms * 0.3)))
+        z0, z1 = float(legs[0]['start']), float(legs[0]['end']) * float(legs[1]['end']) / 100
+        self.assertAlmostEqual((float(legs[0]['end']) - z0) / (z1 - z0), 0.3, delta=0.01)
+
+    def test_delay_follows_skin_speed(self):
+        with mock.patch.object(viewer, 'skin_slowdown', lambda: 0.5):
+            spec = viewer.anim('zoom', start=100, end=110, time=1000, delay=300)[1]
+        f = dict(p.split('=', 1) for p in spec.split() if '=' in p)
+        self.assertEqual((f['time'], f['delay']), ('2000', '600'))
+
+    def test_resume_settles(self):
+        main = self.viewer()
+        kb = self.window.kb
+        kb['t0'] -= kb['time'] / 4000.0                     # a quarter through
+        self.window.freeze()
+        left = kb['time']
+        self.window.thaw()
+        legs = [f for f in main.last() if f['effect'] == 'zoom']
+        self.assertEqual({(f['tween'], f['easing'], int(f['time'])) for f in legs}, {('sine', 'out', int(left))})
+        self.assertFalse([f for f in legs if 'delay' in f])
+
 
 
 class SignIn(unittest.TestCase):
