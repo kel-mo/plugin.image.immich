@@ -14,7 +14,7 @@ import xbmcgui
 import xbmcvfs
 
 from . import items, kodi, proxy, thumbhash
-from .api import ApiError, ImmichClient
+from .api import ApiError, ImmichClient, from_asset
 
 SCREEN = 1920 / 1080
 LOAD_WAIT = 10                           # seconds a photo stays up waiting for the next to arrive
@@ -50,6 +50,24 @@ def skin_slowdown():
         except (RuntimeError, OSError, ValueError) as e:
             kodi.log('skin effectslowdown unknown: {}'.format(e), xbmc.LOGWARNING)
     return _slowdown
+
+
+def cover_size(ratio):
+    """A photo cropped to fill the screen, in skin pixels."""
+    return (1920, 1920 / ratio) if ratio < SCREEN else (1080 * ratio, 1080)
+
+
+def fit_size(ratio):
+    """A photo fitted inside the screen, in skin pixels."""
+    return (1920, 1920 / ratio) if ratio > SCREEN else (1080 * ratio, 1080)
+
+
+def gui_height():
+    """The interface height in real pixels; 1080 when Kodi doesn't say."""
+    try:
+        return int(xbmc.getInfoLabel('System.ScreenHeight')) or 1080
+    except ValueError:
+        return 1080
 
 
 def ease(done, easing):
@@ -95,7 +113,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.stay = max(kodi.setting_int('slide_time'), 2)
         self.fade = max(int(kodi.setting_number('fade_time') * 1000), 200)
         self.kenburns = kodi.setting_bool('kenburns')
-        self.zoom = min(max(kodi.setting_int('zoom'), 100), 125)
+        self.zoom = min(max(kodi.setting_int('zoom'), 100), 110)
         self.scale = self.zoom / 100.0 if self.kenburns else 1.0   # how far photo controls outsize the screen
         self.size = 'preview'
         if kodi.setting_bool('hires'):
@@ -136,7 +154,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         asset = self.assets[index]
         group, back, cover, fit = self.layers[layer]
         group.setAnimations([anim('fade', start=0, end=0, time=0)])   # may still be fading out
-        size = self.photo_size(asset)
+        size = asset['shown_size'] = self.photo_size(asset)
         url = self.client.thumb_url(asset['id'], size)
         for control in (back, cover, fit):          # Kodi shows the old texture until the new one loads
             control.setImage('')
@@ -225,6 +243,9 @@ class Viewer(xbmcgui.WindowXMLDialog):
                 return 'preview'
             asset['mime'] = raw.get('originalMimeType') or ''
             asset['orientation'] = str((raw.get('exifInfo') or {}).get('orientation') or 1)
+            if not asset.get('height'):
+                shaped = from_asset(raw)
+                asset['width'], asset['height'] = shaped['width'], shaped['height']
         return 'fullsize' if asset['mime'] not in UNDECODABLE and asset['orientation'] in UPRIGHT else 'preview'
 
     def display(self, index, fade=None):
@@ -268,13 +289,32 @@ class Viewer(xbmcgui.WindowXMLDialog):
 
     def pan_zoom(self, main, fade):
         """Slow zoom in or out around a random focal point, spanning the fades on both ends."""
-        start, end = (100, self.zoom) if random.random() < 0.6 else (self.zoom, 100)
+        top = 100 * self.top(self.assets[self.index], cover=any(main is layer[2] for layer in self.layers))
+        start, end = (100, top) if random.random() < 0.6 else (top, 100)
         cx, cy = random.randint(480, 1440), random.randint(270, 810)
         if self.scale > 1:
             self.outsize(main, cx, cy)
         self.kb = {'ctrl': main, 'zoom': (start, end), 'center': '{},{}'.format(cx, cy), 'f': 0.0,
                    'easing': 'skew', 't0': time.time(), 'time': int((self.stay * 1000 + 2 * fade) * 1.1)}
         self.move()
+
+    def source_height(self, asset):
+        """The shown image's height in pixels, or None when unknown."""
+        w, h = asset.get('width'), asset.get('height')
+        if not (w and h):
+            return None
+        if asset.get('shown_size') == 'preview':      # 1440 on the short side
+            h *= min(1.0, 1440.0 / min(w, h))
+        return h
+
+    def top(self, asset, cover):
+        """The most this photo may zoom: the setting, but never past one original pixel per screen pixel."""
+        want = self.zoom / 100.0
+        h = self.source_height(asset)
+        if h is None:
+            return want
+        shown = (cover_size if cover else fit_size)(asset['ratio'])[1] * gui_height() / 1080.0
+        return min(want, max(1.0, h / shown))
 
     def state(self, f):
         """The control's zoom at share f of the way."""

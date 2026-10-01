@@ -322,16 +322,18 @@ class Recorder:
 
 
 class KenBurns(NoProxy):
-    def viewer(self, kenburns=True, playing=True, height='1080', zoom=110):
+    def viewer(self, kenburns=True, playing=True, height='1080', ratio=16 / 9, zoom=110, size=None, hires=False):
         assets = api.ImmichClient().search_page(size=2)[0]
-        assets[0]['ratio'] = 16 / 9
+        assets[0]['ratio'] = ratio
+        assets[0]['width'], assets[0]['height'] = size or (None, None)
         window = make_viewer(assets)
         self.window = window
         window.playing = playing
         controls = {}
         with mock.patch.object(window, 'getControl', lambda i: controls.setdefault(i, Recorder())), \
                 mock.patch.object(xbmc, 'getInfoLabel', lambda s: height if s == 'System.ScreenHeight' else ''), \
-                mock.patch.object(kodi, 'setting_bool', lambda k: kenburns if k == 'kenburns' else False), \
+                mock.patch.object(kodi, 'setting_bool', lambda k: {'kenburns': kenburns, 'hires': hires}.get(k, False)), \
+                mock.patch.object(window.client, 'key_info', lambda: {'permissions': ['all']}), \
                 mock.patch.object(kodi, 'setting_int', lambda k: {'slide_time': 5, 'zoom': zoom}.get(k, 0)):
             window.setup()
             window.display(0)
@@ -376,6 +378,24 @@ class KenBurns(NoProxy):
                          (round(ms * 0.3), round(ms * 0.3), ms - round(ms * 0.3)))
         z0, z1 = float(legs[0]['start']), float(legs[0]['end']) * float(legs[1]['end']) / 100
         self.assertAlmostEqual((float(legs[0]['end']) - z0) / (z1 - z0), 0.3, delta=0.01)
+
+    def test_zoom_setting_capped(self):
+        self.viewer(zoom=125)
+        self.assertEqual(self.window.zoom, 110)
+
+    def test_zoom_stops_at_original_pixels(self):
+        main = self.viewer(height='2160', size=(4000, 2250), hires=True)
+        top = 2250 / 2160                                   # one original pixel per screen pixel
+        self.assertEqual(sorted(main.net_zoom()), [round(100 / 1.1, 2), round(100 * top / 1.1, 2)])
+
+    def test_preview_limits_zoom(self):
+        main = self.viewer(height='2160', ratio=4 / 3, size=(4080, 3060))
+        start, end = main.net_zoom()                       # a 1440 preview is already past one to one
+        self.assertEqual((start, end), (round(100 / 1.1, 2),) * 2)
+
+    def test_unknown_size_uses_setting(self):
+        main = self.viewer(height='2160')
+        self.assertEqual(sorted(main.net_zoom()), [round(100 / 1.1, 2), 100.0])
 
     def test_delay_follows_skin_speed(self):
         with mock.patch.object(viewer, 'skin_slowdown', lambda: 0.5):
