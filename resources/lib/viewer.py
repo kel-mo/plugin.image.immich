@@ -29,6 +29,8 @@ NEXT = {2, 14, 77}                       # right, next item, fast forward
 PREV = {1, 15, 78}                       # left, previous item, rewind
 INFO = {11}
 DRIFT = (16, 8)                          # how far the screensaver's text wanders, against OLED burn-in
+CORNER_TIME = 300                        # seconds the screensaver's date and clock stay in their corners
+CORNERS = (('', ''), ('top', ''), ('top', 'right'), ('', 'right'))   # the date's edge and side; the clock takes the opposite
 # Player.stop() and pause() hold the GIL until Kodi is done, and closing a file asks the proxy for its date
 STOP = 'PlayerControl(Stop)'
 PLAY_PAUSE = 'PlayerControl(Play)'
@@ -465,6 +467,9 @@ class Viewer(xbmcgui.WindowXMLDialog):
             self.wander()
 
     def wander(self):
+        edge, side = CORNERS[int(time.time() // CORNER_TIME) % len(CORNERS)]   # by the clock, so short runs share them too
+        self.setProperty('immich.edge', edge)
+        self.setProperty('immich.side', side)
         for group in (310, 320):                    # caption and clock
             self.getControl(group).setPosition(random.randint(-DRIFT[0], DRIFT[0]), random.randint(-DRIFT[1], DRIFT[1]))
 

@@ -90,8 +90,16 @@
         <width>1920</width>
         <height>200</height>
         <texture>shade.png</texture>
+        <visible>!String.IsEqual(Window.Property(immich.edge),top)</visible>
+      </control>
+      <control type="image">
+        <width>1920</width>
+        <height>200</height>
+        <texture flipy="true">shade.png</texture>
+        <visible>String.IsEqual(Window.Property(immich.edge),top)</visible>
       </control>
       <control type="group" id="310">
+        <animation effect="slide" end="0,-880" time="0" condition="String.IsEqual(Window.Property(immich.edge),top)">Conditional</animation>
         <control type="label">
           <left>80</left>
           <top>970</top>
@@ -101,6 +109,19 @@
           <textcolor>DDFFFFFF</textcolor>
           <shadowcolor>AA000000</shadowcolor>
           <label>$INFO[Window.Property(immich.date)]</label>
+          <visible>!String.IsEqual(Window.Property(immich.side),right)</visible>
+        </control>
+        <control type="label">
+          <right>80</right>
+          <top>970</top>
+          <width>400</width>
+          <height>40</height>
+          <align>right</align>
+          <font>font13</font>
+          <textcolor>DDFFFFFF</textcolor>
+          <shadowcolor>AA000000</shadowcolor>
+          <label>$INFO[Window.Property(immich.date)]</label>
+          <visible>String.IsEqual(Window.Property(immich.side),right)</visible>
         </control>
         <control type="label">
           <left>480</left>
@@ -128,6 +149,7 @@
     </control>
 
     <control type="group" id="320">
+      <animation effect="slide" end="0,920" time="0" condition="String.IsEqual(Window.Property(immich.edge),top)">Conditional</animation>
       <control type="label">
         <right>80</right>
         <top>50</top>
@@ -138,7 +160,18 @@
         <textcolor>DDFFFFFF</textcolor>
         <shadowcolor>AA000000</shadowcolor>
         <label>$INFO[System.Time]</label>
-        <visible>String.IsEqual(Window.Property(immich.clock),true) + String.IsEmpty(Window.Property(immich.video))</visible>
+        <visible>String.IsEqual(Window.Property(immich.clock),true) + String.IsEmpty(Window.Property(immich.video)) + !String.IsEqual(Window.Property(immich.side),right)</visible>
+      </control>
+      <control type="label">
+        <left>80</left>
+        <top>50</top>
+        <width>400</width>
+        <height>60</height>
+        <font>font45</font>
+        <textcolor>DDFFFFFF</textcolor>
+        <shadowcolor>AA000000</shadowcolor>
+        <label>$INFO[System.Time]</label>
+        <visible>String.IsEqual(Window.Property(immich.clock),true) + String.IsEmpty(Window.Property(immich.video)) + String.IsEqual(Window.Property(immich.side),right)</visible>
       </control>
     </control>
 

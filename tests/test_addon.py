@@ -741,12 +741,35 @@ class Screensaver(NoProxy):
                 self.assertGreater(len(set(found)), 1)
                 self.assertTrue(all(abs(x) <= viewer.DRIFT[0] and abs(y) <= viewer.DRIFT[1] for x, y in found))
 
+    def test_screensaver_text_changes_corners(self):
+        assets = api.ImmichClient().search_page(size=3)[0]
+        window = make_viewer(assets)
+        window.screensaver, window.info, window.more = True, 1, None
+        window.getControl = lambda i: Recorder()
+        now, corners = [viewer.CORNER_TIME * 1000 + 1], []
+        with mock.patch.object(viewer.time, 'time', lambda: now[0]):
+            for n in range(24):
+                window.caption(assets[n % len(assets)])
+                corners.append((window.getProperty('immich.edge'), window.getProperty('immich.side')))
+                now[0] += viewer.CORNER_TIME / 6
+        self.assertEqual(corners, [viewer.CORNERS[n // 6 % 4] for n in range(24)])   # 6 photos to a corner, in turn
+
     def test_skin_lets_the_text_wander(self):
         import xml.etree.ElementTree as ET
         root = ET.parse(os.path.join(ROOT, 'resources', 'skins', 'default', '1080i', 'script-immich-viewer.xml'))
         groups = {c.get('id'): ' '.join(l.text or '' for l in c.iter('label')) for c in root.iter('control') if c.get('id') in ('310', '320')}
         self.assertIn('immich.date', groups.get('310', ''))
         self.assertIn('System.Time', groups.get('320', ''))
+        top, right = 'Window.Property(immich.edge),top', 'Window.Property(immich.side),right'
+        for gid in ('310', '320'):                          # moves to the other edge
+            group = next(c for c in root.iter('control') if c.get('id') == gid)
+            self.assertTrue(any(top in (a.get('condition') or '') for a in group.findall('animation')))
+        for label in ('immich.date', 'System.Time'):        # one copy for each side
+            sides = [c.findtext('visible') for c in root.iter('control') if label in (c.findtext('label') or '')]
+            self.assertTrue(all(right in v for v in sides))
+            self.assertEqual(sorted('!String.IsEqual({})'.format(right) in v for v in sides), [False, True])
+        shades = [c.find('texture') for c in root.iter('control') if c.findtext('texture') == 'shade.png']
+        self.assertEqual(sorted(t.get('flipy') or '' for t in shades), ['', 'true'])     # one for each edge
 
     def test_viewer_window_is_freed(self):
         import gc
