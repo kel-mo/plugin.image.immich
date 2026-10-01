@@ -150,9 +150,23 @@
               <option label="30402">0</option>
               <option label="30403">1</option>
               <option label="30404">2</option>
+              <option label="30406">3</option>
             </options>
           </constraints>
           <control type="list" format="string"/>
+        </setting>
+        <setting id="screensaver_query" type="string" label="30407" help="30408">
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <dependencies>
+            <dependency type="visible" setting="screensaver_source">3</dependency>
+          </dependencies>
+          <control type="edit" format="string">
+            <heading>30407</heading>
+          </control>
         </setting>
       </group>
     </category>
