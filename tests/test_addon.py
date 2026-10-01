@@ -718,6 +718,36 @@ class Screensaver(NoProxy):
         window.monitor.onScreensaverDeactivated()
         self.assertTrue(window.closed)
 
+    def test_screensaver_text_wanders(self):
+        assets = api.ImmichClient().search_page(size=3)[0]
+        for screensaver in (False, True):
+            window = make_viewer(assets)
+            window.screensaver = screensaver
+            controls = {}
+            window.getControl = lambda i: controls.setdefault(i, Recorder())
+            window.info, window.more = 1, None
+            counters = []
+            for i in range(len(assets) * 4):
+                window.index = i % len(assets)
+                window.caption(assets[window.index])
+                counters.append(window.getProperty('immich.position'))
+            spots = {g: [c[1:] for c in controls.get(g, Recorder()).calls if c[0] == 'setPosition'] for g in (310, 320)}
+            if not screensaver:
+                self.assertEqual((spots, counters[0]), ({310: [], 320: []}, '1 / 3'))
+                continue
+            self.assertEqual(set(counters), {''})                   # no counter
+            for found in spots.values():
+                self.assertEqual(len(found), len(counters))
+                self.assertGreater(len(set(found)), 1)
+                self.assertTrue(all(abs(x) <= viewer.DRIFT[0] and abs(y) <= viewer.DRIFT[1] for x, y in found))
+
+    def test_skin_lets_the_text_wander(self):
+        import xml.etree.ElementTree as ET
+        root = ET.parse(os.path.join(ROOT, 'resources', 'skins', 'default', '1080i', 'script-immich-viewer.xml'))
+        groups = {c.get('id'): ' '.join(l.text or '' for l in c.iter('label')) for c in root.iter('control') if c.get('id') in ('310', '320')}
+        self.assertIn('immich.date', groups.get('310', ''))
+        self.assertIn('System.Time', groups.get('320', ''))
+
     def test_screensaver_leaves_the_player_alone(self):
         xbmc.BUILTINS.clear()
         assets = api.ImmichClient().search_page(size=2)[0]

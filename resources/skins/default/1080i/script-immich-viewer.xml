@@ -91,51 +91,55 @@
         <height>200</height>
         <texture>shade.png</texture>
       </control>
-      <control type="label">
-        <left>80</left>
-        <top>970</top>
-        <width>400</width>
-        <height>40</height>
-        <font>font13</font>
-        <textcolor>DDFFFFFF</textcolor>
-        <shadowcolor>AA000000</shadowcolor>
-        <label>$INFO[Window.Property(immich.date)]</label>
-      </control>
-      <control type="label">
-        <left>480</left>
-        <top>970</top>
-        <width>960</width>
-        <height>40</height>
-        <align>center</align>
-        <font>font13</font>
-        <textcolor>DDFFFFFF</textcolor>
-        <shadowcolor>AA000000</shadowcolor>
-        <label>$INFO[Window.Property(immich.place)]</label>
-      </control>
-      <control type="label">
-        <right>80</right>
-        <top>970</top>
-        <width>400</width>
-        <height>40</height>
-        <align>right</align>
-        <font>font13</font>
-        <textcolor>DDFFFFFF</textcolor>
-        <shadowcolor>AA000000</shadowcolor>
-        <label>$INFO[Window.Property(immich.position)]</label>
+      <control type="group" id="310">
+        <control type="label">
+          <left>80</left>
+          <top>970</top>
+          <width>400</width>
+          <height>40</height>
+          <font>font13</font>
+          <textcolor>DDFFFFFF</textcolor>
+          <shadowcolor>AA000000</shadowcolor>
+          <label>$INFO[Window.Property(immich.date)]</label>
+        </control>
+        <control type="label">
+          <left>480</left>
+          <top>970</top>
+          <width>960</width>
+          <height>40</height>
+          <align>center</align>
+          <font>font13</font>
+          <textcolor>DDFFFFFF</textcolor>
+          <shadowcolor>AA000000</shadowcolor>
+          <label>$INFO[Window.Property(immich.place)]</label>
+        </control>
+        <control type="label">
+          <right>80</right>
+          <top>970</top>
+          <width>400</width>
+          <height>40</height>
+          <align>right</align>
+          <font>font13</font>
+          <textcolor>DDFFFFFF</textcolor>
+          <shadowcolor>AA000000</shadowcolor>
+          <label>$INFO[Window.Property(immich.position)]</label>
+        </control>
       </control>
     </control>
 
-    <control type="label">
-      <right>80</right>
-      <top>50</top>
-      <width>400</width>
-      <height>60</height>
-      <align>right</align>
-      <font>font45</font>
-      <textcolor>DDFFFFFF</textcolor>
-      <shadowcolor>AA000000</shadowcolor>
-      <label>$INFO[System.Time]</label>
-      <visible>String.IsEqual(Window.Property(immich.clock),true) + String.IsEmpty(Window.Property(immich.video))</visible>
+    <control type="group" id="320">
+      <control type="label">
+        <right>80</right>
+        <top>50</top>
+        <width>400</width>
+        <height>60</height>
+        <align>right</align>
+        <font>font45</font>
+        <textcolor>DDFFFFFF</textcolor>
+        <shadowcolor>AA000000</shadowcolor>
+        <label>$INFO[System.Time]</label>
+        <visible>String.IsEqual(Window.Property(immich.clock),true) + String.IsEmpty(Window.Property(immich.video))</visible>
+      </control>
     </control>
 
     <control type="label">

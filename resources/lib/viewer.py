@@ -28,6 +28,7 @@ PAUSE = {7, 12, 79, 229}                 # select, pause, play, play/pause
 NEXT = {2, 14, 77}                       # right, next item, fast forward
 PREV = {1, 15, 78}                       # left, previous item, rewind
 INFO = {11}
+DRIFT = (16, 8)                          # how far the screensaver's text wanders, against OLED burn-in
 # Player.stop() and pause() hold the GIL until Kodi is done, and closing a file asks the proxy for its date
 STOP = 'PlayerControl(Stop)'
 PLAY_PAUSE = 'PlayerControl(Play)'
@@ -459,7 +460,13 @@ class Viewer(xbmcgui.WindowXMLDialog):
         total = '' if self.more else ' / {}'.format(len(self.assets))   # endless shuffle has no total
         if self.info == 2:
             self.fill_details(asset)
-        self.setProperty('immich.position', '{}{}'.format(self.index + 1, total))
+        self.setProperty('immich.position', '' if self.screensaver else '{}{}'.format(self.index + 1, total))
+        if self.screensaver:
+            self.wander()
+
+    def wander(self):
+        for group in (310, 320):                    # caption and clock
+            self.getControl(group).setPosition(random.randint(-DRIFT[0], DRIFT[0]), random.randint(-DRIFT[1], DRIFT[1]))
 
     # ---------------------------------------------------------------- video
     def play_video(self):
