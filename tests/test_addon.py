@@ -593,6 +593,53 @@ class Loading(NoProxy):
         self.assertEqual({a['id'] for a in window.assets[1:4]} - set(window.raws), set())
 
 
+class TextureCache(NoProxy):
+    """Kodi 22 caches photos at 720p even with setImage(url, False); the viewer drops those copies first."""
+    def fake(self, textures):
+        calls = []
+
+        def jsonrpc(method, **params):
+            calls.append((method, params))
+            if method == 'Textures.GetTextures':
+                want = params['filter']
+                return {'textures': [t for t in textures if want['operator'] == 'is' and t['url'] == want['value']
+                                     or want['operator'] == 'contains' and want['value'] in t['url']]}
+            return 'OK'
+        return calls, jsonrpc
+
+    def test_cached_copy_dropped_before_showing(self):
+        window = make_viewer(api.ImmichClient().search_page(size=2)[0])
+        log = []
+
+        class Logged(Recorder):
+            def __getattr__(self, name):
+                return lambda *a, **k: log.append((name,) + a)
+
+        window.getControl = lambda i: Logged()
+        with mock.patch.object(kodi, 'setting_bool', lambda k: False):
+            window.setup()
+        url = window.client.thumb_url(window.assets[0]['id'], 'preview')
+        calls, jsonrpc = self.fake([{'textureid': 7, 'url': url}, {'textureid': 8, 'url': url + 'x'}])
+        with mock.patch.object(kodi, 'jsonrpc', side_effect=lambda m, **p: (log.append(m), jsonrpc(m, **p))[1]):
+            window.prepare(0, 0)
+        self.assertIn(('Textures.RemoveTexture', {'textureid': 7}), calls)
+        self.assertNotIn(('Textures.RemoveTexture', {'textureid': 8}), calls)
+        shown = [i for i, e in enumerate(log) if e == ('setImage', url, False)]
+        self.assertTrue(shown and log.index('Textures.RemoveTexture') < shown[0])
+
+    def test_service_start_drops_cached_originals(self):
+        base = 'http://127.0.0.1:52283/api/assets/{}/thumbnail?size={}'
+        textures = [{'textureid': 1, 'url': base.format('a', 'fullsize')},
+                    {'textureid': 2, 'url': base.format('b', 'preview')},
+                    {'textureid': 3, 'url': base.format('c', 'thumbnail')},
+                    {'textureid': 4, 'url': 'http://elsewhere/api/assets/d/thumbnail?size=fullsize'}]
+        calls, jsonrpc = self.fake(textures)
+        with mock.patch.object(kodi, 'jsonrpc', side_effect=jsonrpc), \
+                mock.patch.object(proxy, 'address', lambda: 'http://127.0.0.1:52283'):
+            proxy.forget_cached_photos()
+        self.assertEqual([p['textureid'] for m, p in calls if m == 'Textures.RemoveTexture'], [1])
+
+
 class Skin(unittest.TestCase):
     def test_photos_keep_subpixel_positions(self):
         import xml.etree.ElementTree as ET
