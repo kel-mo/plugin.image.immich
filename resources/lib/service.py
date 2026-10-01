@@ -23,6 +23,7 @@ def run():
     monitor = Monitor(server)
     try:
         proxy.forget_keyed_textures()
+        proxy.forget_cached_photos()
         monitor.waitForAbort()
     finally:
         proxy.stop(server)
