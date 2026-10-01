@@ -748,6 +748,25 @@ class Screensaver(NoProxy):
         self.assertIn('immich.date', groups.get('310', ''))
         self.assertIn('System.Time', groups.get('320', ''))
 
+    def test_viewer_window_is_freed(self):
+        import gc
+        import weakref
+        refs = []
+
+        def run(window):
+            window.getControl = lambda i: Recorder()
+            with mock.patch.object(kodi, 'setting_bool', lambda k: False):
+                window.setup()
+            refs.append(weakref.ref(window))
+        gc.disable()                                        # Kodi checks for leftovers before any collection
+        try:
+            with mock.patch.object(viewer.Viewer, 'run', run):
+                for screensaver in (False, True):
+                    viewer.play(api.ImmichClient(), [{'id': 'p', 'image': True}], screensaver=screensaver)
+        finally:
+            gc.enable()
+        self.assertEqual([r() for r in refs], [None, None])
+
     def test_screensaver_leaves_the_player_alone(self):
         xbmc.BUILTINS.clear()
         assets = api.ImmichClient().search_page(size=2)[0]

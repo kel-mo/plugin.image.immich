@@ -579,6 +579,7 @@ def play(client, assets, start=0, autoplay=True, more=None, screensaver=False):
         window.run()
     finally:
         window.close()
+        window.monitor = None                       # breaks the Waker cycle, so Kodi frees the window
         del window
         if not screensaver:
             xbmc.executebuiltin('InhibitScreensaver(false)')
