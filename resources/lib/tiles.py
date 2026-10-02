@@ -18,6 +18,7 @@ from .api import ApiError, from_asset
 
 SIZE = 512                               # square, as Estuary shows favourites
 DIM = 0.5                                # photo brightness behind the name
+SHADOW = 200                             # darkness of the halo round the name, of 255
 ROOT = 'immich'                          # the add-on's own tile
 FOLDERS = {'timeline': 30000, 'memories': 30017, 'people': 30012, 'places': 30014,
            'favourites': 30021, 'albums': 30001, 'search_menu': 30022, 'shuffle': 30026}   # shuffle: Shuffle everything
@@ -162,7 +163,7 @@ def render(data, label, dest, size=SIZE // 5):
     """A square crop, darkened, with the label centred; the plain photo when Kodi's Python lacks PIL."""
     tmp = dest + '.tmp'
     try:
-        from PIL import Image, ImageDraw, ImageEnhance, ImageOps
+        from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
     except ImportError:
         with open(tmp, 'wb') as f:
             f.write(data)
@@ -174,6 +175,9 @@ def render(data, label, dest, size=SIZE // 5):
     face, stroke = font(size)
     left, top, right, bottom = draw.textbbox((0, 0), label, font=face, stroke_width=stroke)
     xy = ((SIZE - (right - left)) / 2 - left, (SIZE - (bottom - top)) / 2 - top)
+    shadow = Image.new('L', im.size)                        # a soft dark halo, so bright pictures stay readable
+    ImageDraw.Draw(shadow).text(xy, label, font=face, fill=SHADOW, stroke_width=stroke + size // 12, stroke_fill=SHADOW)
+    im.paste((0, 0, 0), mask=shadow.filter(ImageFilter.GaussianBlur(size / 6)))
     draw.text(xy, label, font=face, fill=(255, 255, 255), stroke_width=stroke, stroke_fill=(255, 255, 255))
     im.save(tmp, 'JPEG', quality=88)
     os.replace(tmp, dest)
