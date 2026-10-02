@@ -741,6 +741,25 @@ class Tiles(NoProxy):
         self.assertTrue(tiles.due())                         # tried again later
         self.assertEqual(tiles.drawn('shuffle'), [])
 
+    def test_an_update_redraws_the_same_day(self):
+        kodi.ensure_dir(tiles.tile_dir())
+        with open(tiles.stamp(), 'w') as f:
+            f.write(tiles.drawing())
+        self.assertFalse(tiles.due())
+        with mock.patch.object(kodi, 'ADDON_VERSION', '9.9.9'):
+            self.assertTrue(tiles.due())
+        with open(tiles.stamp(), 'w') as f:
+            f.write(date.today().isoformat())                # as 0.3.1 and 0.3.2 wrote it
+        self.assertTrue(tiles.due())
+
+    def test_a_refresh_past_midnight_keeps_its_day(self):
+        with mock.patch.object(tiles, 'render', lambda data, label, dest, size: open(dest, 'wb').close()), \
+                mock.patch.object(kodi, 'jsonrpc', lambda *a, **k: {}), \
+                mock.patch.object(tiles, 'drawing', lambda day=None: (day or 'tomorrow') + ' v'):
+            tiles.refresh(self.client, xbmc.Monitor())
+        with open(tiles.stamp()) as f:
+            self.assertEqual(f.read(), date.today().isoformat() + ' v')
+
     def test_off_draws_nothing(self):
         with mock.patch.dict(xbmcaddon.SETTINGS, {'tiles': 'false'}):
             self.assertFalse(tiles.due())

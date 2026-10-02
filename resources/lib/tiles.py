@@ -188,13 +188,18 @@ def stamp():
     return os.path.join(tile_dir(), 'drawn')
 
 
+def drawing(day=None):
+    """What the stamp records: the day, and the version, so an update redraws at once."""
+    return '{} {}'.format(day or date.today().isoformat(), kodi.ADDON_VERSION)
+
+
 def due():
-    """Tiles on and not yet drawn today."""
+    """Tiles on and not yet drawn today by this version."""
     if kodi.fresh_setting('tiles') != 'true':
         return False
     try:
         with open(stamp()) as f:
-            return f.read().strip() != date.today().isoformat()
+            return f.read().strip() != drawing()
     except OSError:
         return True
 
@@ -225,7 +230,7 @@ def refresh(client, monitor):
             kodi.debug('tile {}: {}'.format(key, e))
     if done:
         with open(stamp(), 'w') as f:
-            f.write(day)
+            f.write(drawing(day))                         # the day it started, should it run past midnight
         tidy()
     kodi.log('tiles: drew {} of {}'.format(done, len(FOLDERS) + 1))
     return done
