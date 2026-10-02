@@ -106,6 +106,14 @@
             <formatlabel>30208</formatlabel>
           </control>
         </setting>
+        <setting id="smooth_zoom" type="boolean" label="30218" help="30219">
+          <level>1</level>
+          <default>false</default>
+          <dependencies>
+            <dependency type="enable" setting="kenburns">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
         <setting id="shuffle" type="boolean" label="30209" help="">
           <level>0</level>
           <default>false</default>
