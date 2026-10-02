@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.image.immich" name="Immich" version="0.2.8" provider-name="kel-mo">
+<addon id="plugin.image.immich" name="Immich" version="0.2.9" provider-name="kel-mo">
   <requires>
     <import addon="xbmc.python" version="3.0.1"/>
   </requires>
@@ -16,7 +16,9 @@
     <license>GPL-2.0-or-later</license>
     <source>https://github.com/kel-mo/plugin.image.immich</source>
     <website>https://immich.app</website>
-    <news>v0.2.8
+    <news>v0.2.9
+- Smooth zoom setting: stops sand, leaves and other fine detail from shimmering, on Kodi builds that support mipmapped textures
+v0.2.8
 - The screensaver moves its date and clock to another corner every five minutes
 - Fix the screensaver leaving a window behind each time, which could stop slideshows opening
 v0.2.7
@@ -39,9 +41,7 @@ v0.2.3
 - Clearer message when the API key lacks a permission
 - A dropped or stalled connection shows an error instead of failing
 v0.2.2
-- Rotated photos show upright with full resolution on
-v0.2.1
-- Fix Kodi freezing for minutes when a video stops</news>
+- Rotated photos show upright with full resolution on</news>
     <assets>
       <icon>resources/icon.png</icon>
     </assets>
