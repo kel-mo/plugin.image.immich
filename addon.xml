@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.image.immich" name="Immich" version="0.3.5" provider-name="kel-mo">
+<addon id="plugin.image.immich" name="Immich" version="0.3.6" provider-name="kel-mo">
   <requires>
     <import addon="xbmc.python" version="3.0.1"/>
   </requires>
@@ -16,7 +16,9 @@
     <license>GPL-2.0-or-later</license>
     <source>https://github.com/kel-mo/plugin.image.immich</source>
     <website>https://immich.app</website>
-    <news>v0.3.5
+    <news>v0.3.6
+- Favourites that showed a tile go back to the Immich icon by themselves, keeping their place
+v0.3.5
 - Tiles stay on the menu: Immich favourites no longer get one, so pick a thumbnail again for any that did
 - Kodi quits promptly even with a photo or tile request under way
 v0.3.4
