@@ -45,7 +45,9 @@ library. During the slideshow:
 | Back | Close |
 
 Time per photo, crossfade, pan and zoom, shuffle and videos are in the
-add-on settings.
+add-on settings. *Smooth zoom* stops fine detail such as sand or leaves from
+shimmering while photos zoom; it needs a Kodi build with mipmapped textures
+(the `mipmap` texture attribute) and looks worse without one.
 
 ## On the home screen
 

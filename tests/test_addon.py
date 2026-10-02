@@ -348,12 +348,12 @@ class Recorder:
         return [dict(p.split('=', 1) for p in spec.split() if '=' in p) for _, spec in call[1]]
 
     def net_zoom(self):
-        """(start, end) of the last zooms set, chained legs combined, to 2 places."""
+        """(start, end) of the last zooms set, chained legs combined, to 3 places then 2."""
         legs = [f for f in self.last() if f['effect'] == 'zoom']
         start, end = float(legs[0]['start']), float(legs[0]['end'])
         for f in legs[1:]:
             start, end = start * float(f['start']) / 100, end * float(f['end']) / 100
-        return round(start, 2), round(end, 2)
+        return round(round(start, 3), 2), round(round(end, 3), 2)
 
     def net_slide(self):
         """((x, y) start, (x, y) end) of the last slides set, chained legs added, to 2 places."""
@@ -379,8 +379,17 @@ class Recorder:
         return found
 
 
+OUT = 1.1 * viewer.SUPERSAMPLE                        # photo controls over the screen, at 110%
+
+
+def net(percent):
+    """An on-screen zoom as net_zoom() sees it: shrunk to 3 places, then 2."""
+    return round(round(percent / OUT, 3), 2)
+
+
 class KenBurns(NoProxy):
-    def viewer(self, kenburns=True, playing=True, height='1080', ratio=16 / 9, zoom=110, size=None, hires=False):
+    def viewer(self, kenburns=True, playing=True, height='1080', ratio=16 / 9, zoom=110, size=None, hires=False,
+               smooth=True):
         assets = api.ImmichClient().search_page(size=2)[0]
         assets[0]['ratio'] = ratio
         assets[0]['width'], assets[0]['height'] = size or (None, None)
@@ -390,7 +399,7 @@ class KenBurns(NoProxy):
         controls = {}
         with mock.patch.object(window, 'getControl', lambda i: controls.setdefault(i, Recorder())), \
                 mock.patch.object(xbmc, 'getInfoLabel', lambda s: height if s == 'System.ScreenHeight' else ''), \
-                mock.patch.object(kodi, 'setting_bool', lambda k: {'kenburns': kenburns, 'hires': hires}.get(k, False)), \
+                mock.patch.object(kodi, 'setting_bool', lambda k: {'kenburns': kenburns, 'hires': hires, 'smooth_zoom': smooth}.get(k, False)), \
                 mock.patch.object(window.client, 'key_info', lambda: {'permissions': ['all']}), \
                 mock.patch.object(kodi, 'setting_int', lambda k: {'slide_time': 5, 'zoom': zoom}.get(k, 0)):
             window.setup()
@@ -401,24 +410,29 @@ class KenBurns(NoProxy):
     def test_photo_decoded_at_largest_frame(self):
         main = self.viewer()
         names = [c[0] for c in main.calls]
-        self.assertIn(('setWidth', 2112), main.calls)
-        self.assertIn(('setHeight', 1188), main.calls)
+        self.assertIn(('setWidth', round(1920 * OUT)), main.calls)
+        self.assertIn(('setHeight', round(1080 * OUT)), main.calls)
         loaded = [i for i, c in enumerate(main.calls) if c[0] == 'setImage' and c[1]]
         self.assertTrue(loaded and names.index('setWidth') < loaded[0])
 
     def test_zoom_only_shrinks(self):
         main = self.viewer()
-        self.assertEqual(sorted(main.net_zoom()), [round(100 / 1.1, 2), 100.0])
+        self.assertEqual(sorted(main.net_zoom()), [net(100), net(110)])
         cx, cy = (int(v) for v in main.last()[0]['center'].split(','))
-        self.assertIn(('setPosition', round(cx * (1 - 1.1)), round(cy * (1 - 1.1))), main.calls)
+        self.assertIn(('setPosition', round(cx * (1 - OUT)), round(cy * (1 - OUT))), main.calls)
 
     def test_still_photo_fills_screen(self):
         main = self.viewer(playing=False)
-        self.assertEqual(main.zooms()[-1:], [(round(100 / 1.1, 3), round(100 / 1.1, 3), '960,540')])
-        self.assertIn(('setPosition', -96, -54), main.calls)
+        self.assertEqual(main.zooms()[-1:], [(round(100 / OUT, 3), round(100 / OUT, 3), '960,540')])
+        self.assertIn(('setPosition', round(960 * (1 - OUT)), round(540 * (1 - OUT))), main.calls)
 
     def test_4k_interface_outsizes_too(self):
         main = self.viewer(height='2160')
+        self.assertIn(('setWidth', round(1920 * OUT)), main.calls)
+        self.assertEqual(sorted(main.net_zoom()), [net(100), net(110)])
+
+    def test_smooth_zoom_off_decodes_at_zoom_size(self):
+        main = self.viewer(smooth=False)
         self.assertIn(('setWidth', 2112), main.calls)
         self.assertEqual(sorted(main.net_zoom()), [round(100 / 1.1, 2), 100.0])
 
@@ -433,7 +447,7 @@ class KenBurns(NoProxy):
         self.assertIs(main, self.window.layers[0][3])
         self.assertTrue([c for c in back.calls if c[0] == 'setImage' and c[1]])
         self.assertIsNone(main.net_slide())
-        self.assertEqual(sorted(main.net_zoom()), [round(100 / 1.1, 2), 100.0])
+        self.assertEqual(sorted(main.net_zoom()), [net(100), net(110)])
 
     def test_three_two_fits_over_backdrop(self):
         main = self.viewer(ratio=1.5)
@@ -446,19 +460,19 @@ class KenBurns(NoProxy):
 
     def test_panorama_pans_sideways(self):
         main = self.viewer(ratio=3.92)
-        self.assertIn(('setWidth', 4657), main.calls)
+        self.assertIn(('setWidth', round(1080 * 3.92 * OUT)), main.calls)
         (x0, y0), (_, y1) = main.net_slide()
         self.assertEqual((abs(x0), y0, y1), (round(0.015 * 1920 * 9.6 / 2, 2), 0.0, 0.0))
 
     def test_four_three_keeps_zooming(self):
         main = self.viewer(ratio=4 / 3)
         self.assertEqual(main.slides(), [])
-        self.assertEqual(sorted(main.net_zoom()), [round(100 / 1.1, 2), 100.0])
+        self.assertEqual(sorted(main.net_zoom()), [net(100), net(110)])
 
     def test_paused_pan_photo_shows_centre(self):
         main = self.viewer(ratio=3.92, playing=False)
         self.assertEqual(main.slides(), [])
-        self.assertEqual(main.zooms()[-1:], [(round(100 / 1.1, 3), round(100 / 1.1, 3), '960,540')])
+        self.assertEqual(main.zooms()[-1:], [(round(100 / OUT, 3), round(100 / OUT, 3), '960,540')])
 
     def test_pan_holds_where_it_got_to(self):
         main = self.viewer(ratio=3.92)
@@ -471,7 +485,7 @@ class KenBurns(NoProxy):
         (d0, _), (d1, _) = self.window.kb['pan']
         self.assertEqual((round(x0, 1), round(x1, 1)), (round(d0 + (d1 - d0) * done, 1),) * 2)
         zoom = main.net_zoom()
-        self.assertAlmostEqual(zoom[0], 100 * (1 + 0.1 * done) / 1.1, delta=0.05)
+        self.assertAlmostEqual(zoom[0], 100 * (1 + 0.1 * done) / OUT, delta=0.05)
         self.assertEqual(zoom[0], zoom[1])
 
     def test_motion_rises_fast_and_settles_slowly(self):
@@ -492,21 +506,21 @@ class KenBurns(NoProxy):
     def test_zoom_stops_at_original_pixels(self):
         main = self.viewer(height='2160', size=(4000, 2250), hires=True)
         top = 2250 / 2160                                   # one original pixel per screen pixel
-        self.assertEqual(sorted(main.net_zoom()), [round(100 / 1.1, 2), round(100 * top / 1.1, 2)])
+        self.assertEqual(sorted(main.net_zoom()), [net(100), net(100 * top)])
 
     def test_panorama_stops_at_original_pixels(self):
         main = self.viewer(height='2160', ratio=3.92, size=(12672, 2200), hires=True)
-        self.assertEqual(sorted(main.net_zoom()), [round(100 / 1.1, 2), round(100 * (2200 / 2160) / 1.1, 2)])
+        self.assertEqual(sorted(main.net_zoom()), [net(100), net(100 * (2200 / 2160))])
         self.assertTrue(main.net_slide())
 
     def test_preview_limits_zoom(self):
         main = self.viewer(height='2160', ratio=4 / 3, size=(4080, 3060))
         start, end = main.net_zoom()                       # a 1440 preview is already past one to one
-        self.assertEqual((start, end), (round(100 / 1.1, 2),) * 2)
+        self.assertEqual((start, end), (net(100),) * 2)
 
     def test_unknown_size_uses_setting(self):
         main = self.viewer(height='2160')
-        self.assertEqual(sorted(main.net_zoom()), [round(100 / 1.1, 2), 100.0])
+        self.assertEqual(sorted(main.net_zoom()), [net(100), net(110)])
 
     def test_delay_follows_skin_speed(self):
         with mock.patch.object(viewer, 'skin_slowdown', lambda: 0.5):

@@ -23,6 +23,7 @@ PAN_SPEED = 0.015                        # screen widths a second
 LOAD_WAIT = 10                           # seconds a photo stays up waiting for the next to arrive
 AHEAD = 3                                # photos whose details are fetched in the background
 EASE_PEAK = 0.3                          # motion is fastest here: quick to start, long to settle
+SUPERSAMPLE = 2 ** 0.5                   # moving photos decode this much larger, then mipmaps shrink them smoothly
 CLOSE = {9, 10, 13, 92}                  # parent dir, previous menu, stop, back
 PAUSE = {7, 12, 79, 229}                 # select, pause, play, play/pause
 NEXT = {2, 14, 77}                       # right, next item, fast forward
@@ -131,7 +132,8 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.fade = max(int(kodi.setting_number('fade_time') * 1000), 200)
         self.kenburns = kodi.setting_bool('kenburns') or self.screensaver
         self.zoom = min(max(kodi.setting_int('zoom'), 100), 110)
-        self.scale = self.zoom / 100.0 if self.kenburns else 1.0   # how far photo controls outsize the screen
+        sample = SUPERSAMPLE if kodi.setting_bool('smooth_zoom') else 1.0   # needs Kodi with mipmapped textures
+        self.scale = self.zoom / 100.0 * sample if self.kenburns else 1.0   # how far photo controls outsize the screen
         self.size = 'preview'
         if kodi.setting_bool('hires'):
             try:
