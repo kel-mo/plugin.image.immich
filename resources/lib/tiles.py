@@ -18,6 +18,7 @@ from .api import ApiError, from_asset
 SIZE = 512                               # square, as Estuary shows folders
 DIM = 0.5                                # photo brightness behind the name
 SHADOW = 200                             # darkness of the halo round the name, of 255
+OVER = 201                               # px: a skin's font may hint badly below this, as Estuary's does; names are drawn larger and shrunk
 FOLDERS = {'timeline': 30000, 'memories': 30017, 'people': 30012, 'places': 30014,
            'favourites': 30021, 'albums': 30001, 'search_menu': 30022, 'shuffle': 30026}   # shuffle: Shuffle everything
 FONT_DIRS = ('special://skin/fonts', 'special://home/media/Fonts', 'special://xbmc/media/Fonts')
@@ -132,20 +133,25 @@ def font_file():
     return None, False
 
 
+def scale(size):
+    return OVER // size + 1
+
+
 def font(size):
-    """The skin's font at this size, and the stroke that thickens a regular one."""
+    """The skin's font at this size, as drawn larger, and the stroke that thickens a regular one."""
     from PIL import ImageFont
     file, bold = font_file()
-    return (ImageFont.truetype(file, size) if file else ImageFont.load_default(size)), (0 if bold else max(1, size // 24))
+    big = size * scale(size)
+    return (ImageFont.truetype(file, big) if file else ImageFont.load_default(big)), (0 if bold else max(1, size // 24) * scale(size))
 
 
-def lines(draw, label, face, stroke):
-    """The label as it fits 80 % of the width: one line, else two split where the longer is shortest; None if not."""
+def lines(draw, label, face, stroke, limit):
+    """The label as it fits the limit: one line, else two split where the longer is shortest; None if not."""
     width = lambda text: max(draw.textbbox((0, 0), t, font=face, stroke_width=stroke)[2] for t in text.split('\n'))
     words = label.split()
     tries = [label] + [' '.join(words[:i]) + '\n' + ' '.join(words[i:]) for i in range(1, len(words))]
-    best = min(tries, key=lambda text: (width(text) > SIZE * 0.8, text.count('\n'), width(text)))
-    return best if width(best) <= SIZE * 0.8 else None
+    best = min(tries, key=lambda text: (width(text) > limit, text.count('\n'), width(text)))
+    return best if width(best) <= limit else None
 
 
 def text_size(labels):
@@ -158,19 +164,35 @@ def text_size(labels):
     size = SIZE // 5
     while size > 12:
         face, stroke = font(size)
-        if all(lines(draw, label, face, stroke) for label in labels):
+        if all(lines(draw, label, face, stroke, fit(size)) for label in labels):
             break
         size = int(size * 0.9)
     return size
 
 
-def halo(xy, text, face, stroke, size):
+def fit(size):
+    """How wide a name may be as drawn: 80 % of the tile."""
+    return SIZE * 0.8 * scale(size)
+
+
+def text_mask(text, face, stroke, size):
+    """The name centred on a tile-sized mask, drawn larger and shrunk."""
+    from PIL import Image, ImageDraw
+    big = SIZE * scale(size)
+    mask = Image.new('L', (big, big))
+    draw = ImageDraw.Draw(mask)
+    left, top, right, bottom = draw.textbbox((0, 0), text, font=face, stroke_width=stroke, align='center')
+    draw.text(((big - (right - left)) / 2 - left, (big - (bottom - top)) / 2 - top), text, font=face, fill=255,
+              stroke_width=stroke, stroke_fill=255, align='center')
+    return mask.resize((SIZE, SIZE), Image.LANCZOS)
+
+
+def halo(mask, size):
     """A soft dark halo, so bright pictures stay readable: the text as drawn, widened, then blurred.
     Widened afterwards, as a thicker stroke would space wrapped lines further apart than the text's."""
-    from PIL import Image, ImageDraw, ImageFilter
-    mask = Image.new('L', (SIZE, SIZE))
-    ImageDraw.Draw(mask).text(xy, text, font=face, fill=SHADOW, stroke_width=stroke, stroke_fill=SHADOW, align='center')
-    return mask.filter(ImageFilter.MaxFilter(2 * (size // 12) + 1)).filter(ImageFilter.GaussianBlur(size / 6))
+    from PIL import ImageFilter
+    dark = mask.point(lambda v: v * SHADOW // 255)
+    return dark.filter(ImageFilter.MaxFilter(2 * (size // 12) + 1)).filter(ImageFilter.GaussianBlur(size / 6))
 
 
 def render(data, label, dest, size=SIZE // 5):
@@ -185,13 +207,10 @@ def render(data, label, dest, size=SIZE // 5):
         return
     im = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert('RGB')
     im = ImageEnhance.Brightness(ImageOps.fit(im, (SIZE, SIZE), Image.LANCZOS)).enhance(DIM)
-    draw = ImageDraw.Draw(im)
     face, stroke = font(size)
-    text = lines(draw, label, face, stroke) or label
-    left, top, right, bottom = draw.textbbox((0, 0), text, font=face, stroke_width=stroke, align='center')
-    xy = ((SIZE - (right - left)) / 2 - left, (SIZE - (bottom - top)) / 2 - top)
-    im.paste((0, 0, 0), mask=halo(xy, text, face, stroke, size))
-    draw.text(xy, text, font=face, fill=(255, 255, 255), stroke_width=stroke, stroke_fill=(255, 255, 255), align='center')
+    mask = text_mask(lines(ImageDraw.Draw(im), label, face, stroke, fit(size)) or label, face, stroke, size)
+    im.paste((0, 0, 0), mask=halo(mask, size))
+    im.paste((255, 255, 255), mask=mask)
     im.save(tmp, 'JPEG', quality=88)
     os.replace(tmp, dest)
 

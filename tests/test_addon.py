@@ -689,19 +689,20 @@ class Tiles(NoProxy):
         with mock.patch.object(tiles, 'font_file', lambda: (None, False)), mock.patch.object(tiles, 'SHADOW', 0):
             tiles.render(photo, 'Immich', dest)
         plain = Image.open(dest).convert('L')
-        halo = sum(im.getpixel((x, tiles.SIZE // 2)) for x in range(first - 12, first))
-        self.assertLess(halo, sum(plain.getpixel((x, tiles.SIZE // 2)) for x in range(first - 12, first)) * 0.6)
+        darkest = lambda i: min(i.getpixel((x, tiles.SIZE // 2)) for x in range(first - 20, first))
+        self.assertLess(darkest(im), darkest(plain) * 0.6)                                   # the halo beside the text
 
     @unittest.skipUnless(PIL, 'needs PIL')
     def test_one_text_size_fits_every_name(self):
         from PIL import Image, ImageDraw
         names = ['Places', 'On this day and more']
         with mock.patch.object(tiles, 'font_file', lambda: (None, False)):
-            face, stroke = tiles.font(tiles.text_size(names))
+            size = tiles.text_size(names)
+            face, stroke = tiles.font(size)
         draw = ImageDraw.Draw(Image.new('L', (1, 1)))
         for name in names:
-            for line in tiles.lines(draw, name, face, stroke).split('\n'):
-                self.assertLessEqual(draw.textbbox((0, 0), line, font=face, stroke_width=stroke)[2], tiles.SIZE * 0.8)
+            for line in tiles.lines(draw, name, face, stroke, tiles.fit(size)).split('\n'):
+                self.assertLessEqual(draw.textbbox((0, 0), line, font=face, stroke_width=stroke)[2], tiles.fit(size))
 
     @unittest.skipUnless(PIL, 'needs PIL')
     def test_long_names_wrap_rather_than_shrink(self):
@@ -712,24 +713,31 @@ class Tiles(NoProxy):
             size = tiles.text_size(['Search', 'Smart collections'])
             face, stroke = tiles.font(size)
             draw = ImageDraw.Draw(Image.new('L', (1, 1)))
-            self.assertEqual(tiles.lines(draw, 'Smart collections', face, stroke), 'Smart\ncollections')
-            self.assertEqual(tiles.lines(draw, 'Search', face, stroke), 'Search')
+            self.assertEqual(tiles.lines(draw, 'Smart collections', face, stroke, tiles.fit(size)), 'Smart\ncollections')
+            self.assertEqual(tiles.lines(draw, 'Search', face, stroke, tiles.fit(size)), 'Search')
 
     @unittest.skipUnless(PIL, 'needs PIL')
     def test_halo_sits_on_wrapped_lines(self):
         from PIL import Image, ImageDraw
         with mock.patch.object(tiles, 'font_file', lambda: (None, False)):
-            size = tiles.text_size(['Favourites', 'On this day'])
+            size = tiles.text_size(['Favourites', 'On this day and more'])
             face, stroke = tiles.font(size)
-        mask = Image.new('L', (tiles.SIZE, tiles.SIZE))
-        draw = ImageDraw.Draw(mask)
-        text = tiles.lines(draw, 'On this day', face, stroke)
+        draw = ImageDraw.Draw(Image.new('L', (1, 1)))
+        text = tiles.lines(draw, 'On this day and more', face, stroke, tiles.fit(size))
         self.assertIn('\n', text)
-        draw.text((100, 100), text, font=face, fill=255, stroke_width=stroke, align='center')
+        mask = tiles.text_mask(text, face, stroke, size)
         glyphs = mask.getbbox()
-        halo = tiles.halo((100, 100), text, face, stroke, size).point(lambda v: 255 if v > 40 else 0).getbbox()
+        halo = tiles.halo(mask, size).point(lambda v: 255 if v > 40 else 0).getbbox()
         top, bottom = glyphs[1] - halo[1], halo[3] - glyphs[3]
         self.assertLessEqual(abs(top - bottom), 3)           # as far past the last line as the first
+
+    @unittest.skipUnless(PIL, 'needs PIL')
+    def test_names_drawn_past_the_fonts_hinting(self):
+        with mock.patch.object(tiles, 'font_file', lambda: (None, False)):
+            for size in (40, 72, 81, 102):
+                face, stroke = tiles.font(size)
+                self.assertGreater(face.size, 200, size)          # Estuary's Noto Sans is misdrawn up to 200 px
+                self.assertEqual(face.size, size * tiles.scale(size))
 
     def test_a_refresh_past_midnight_keeps_its_day(self):
         with mock.patch.object(tiles, 'render', lambda data, label, dest, size: open(dest, 'wb').close()), \
