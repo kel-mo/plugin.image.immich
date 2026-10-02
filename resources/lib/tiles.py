@@ -8,8 +8,6 @@ import time
 import xml.etree.ElementTree as ET
 from datetime import date
 
-import xbmc
-import xbmcgui
 import xbmcvfs
 
 from . import kodi
@@ -22,7 +20,6 @@ OVER = 201                               # px: a skin's font may hint badly belo
 FOLDERS = {'timeline': 30000, 'memories': 30017, 'people': 30012, 'places': 30014,
            'favourites': 30021, 'albums': 30001, 'search_menu': 30022, 'shuffle': 30026}   # shuffle: Shuffle everything
 FONT_DIRS = ('special://skin/fonts', 'special://home/media/Fonts', 'special://xbmc/media/Fonts')
-REPAIRING = 'tiles.repairing'            # Home window property: the add-on repairing favourites, as a sister add-on may too
 
 
 def tile_dir():
@@ -283,56 +280,3 @@ def forget():
     for t in (found or {}).get('textures') or []:
         kodi.jsonrpc('Textures.RemoveTexture', textureid=t['textureid'])
 
-
-
-# ---------------------------------------------------------------- favourites
-def repair_favourites(monitor):
-    """Favourites still showing a tile from before 0.3.5, pointed back at the icon through Kodi's own
-    favourites, as adding one that exists removes it: each from the first on is re-added in turn, so
-    they keep their order. How many were fixed."""
-    home = xbmcgui.Window(10000)
-    for _ in range(60):                                       # one add-on at a time
-        if not home.getProperty(REPAIRING):
-            break
-        if monitor.waitForAbort(1):
-            return 0
-    home.setProperty(REPAIRING, kodi.ADDON_ID)
-    try:
-        return repair(favourites_list())
-    finally:
-        home.clearProperty(REPAIRING)
-
-
-def repair(favs):
-    ours = lambda f: (f.get('thumbnail') or '').startswith(tile_dir() + os.sep)
-    first = next((i for i, f in enumerate(favs) if ours(f)), len(favs))
-    if any(f.get('type') == 'unknown' for f in favs[first:]):   # one Kodi can't re-add: leave the order alone
-        kodi.log('tiles: favourites left alone, as one after the first with a tile is of a kind Kodi cannot re-add',
-                 xbmc.LOGWARNING)
-        return 0
-    fixed = 0
-    for f in favs[first:]:
-        params = {k: f[k] for k in ('type', 'title', 'window', 'windowparameter', 'path') if f.get(k)}
-        kodi.jsonrpc('Favourites.AddFavourite', **params)       # removes it, as it exists
-        if any(same(f, g) for g in favourites_list()):          # not matched, so a copy was added instead
-            kodi.jsonrpc('Favourites.AddFavourite', **params)   # which this removes again
-            kodi.log('tiles: favourite {!r} could not be re-added'.format(f.get('title')), xbmc.LOGWARNING)
-            return fixed
-        if ours(f):
-            params['thumbnail'] = kodi.ICON
-            fixed += 1
-        elif f.get('thumbnail'):
-            params['thumbnail'] = f['thumbnail']
-        kodi.jsonrpc('Favourites.AddFavourite', **params)       # back, at the end: in order
-    if fixed:
-        kodi.log('tiles: pointed {} favourites back at the icon'.format(fixed))
-    return fixed
-
-
-def same(f, g):
-    return all(f.get(k) == g.get(k) for k in ('type', 'window', 'windowparameter', 'path'))
-
-
-def favourites_list():
-    found = kodi.jsonrpc('Favourites.GetFavourites', properties=['thumbnail', 'window', 'windowparameter', 'path'])
-    return (found or {}).get('favourites') or []
