@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.image.immich" name="Immich" version="0.3.7" provider-name="kel-mo">
+<addon id="plugin.image.immich" name="Immich" version="0.3.8" provider-name="kel-mo">
   <requires>
     <import addon="xbmc.python" version="3.0.1"/>
   </requires>
@@ -16,7 +16,9 @@
     <license>GPL-2.0-or-later</license>
     <source>https://github.com/kel-mo/plugin.image.immich</source>
     <website>https://immich.app</website>
-    <news>v0.3.7
+    <news>v0.3.8
+- Years and months in Timeline, and countries in Places, show one of their photos
+v0.3.7
 - Tile names are drawn properly with the Estuary skin's font
 v0.3.6
 - Favourites that showed a tile go back to the Immich icon by themselves, keeping their place
@@ -41,9 +43,7 @@ v0.2.9
 - Smooth zoom setting: stops sand, leaves and other fine detail from shimmering, on Kodi builds that support mipmapped textures
 v0.2.8
 - The screensaver moves its date and clock to another corner every five minutes
-- Fix the screensaver leaving a window behind each time, which could stop slideshows opening
-v0.2.7
-- The screensaver hides the photo count and moves its captions and clock a little, against OLED burn-in</news>
+- Fix the screensaver leaving a window behind each time, which could stop slideshows opening</news>
     <assets>
       <icon>resources/icon.png</icon>
     </assets>
