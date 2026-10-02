@@ -31,6 +31,10 @@ def run():
     try:
         proxy.forget_keyed_textures()
         proxy.forget_cached_photos()
+        try:
+            tiles.repair_favourites(monitor)
+        except Exception:
+            kodi.log('favourites not repaired: {}'.format(traceback.format_exc()), xbmc.LOGWARNING)
         wait = TILE_START
         while not monitor.waitForAbort(wait):
             wait = TILE_CHECK
