@@ -734,6 +734,13 @@ class Tiles(NoProxy):
             self.assertEqual(len(tiles.drawn(key)), 1, key)
         self.assertEqual(calls, ['Textures.GetTextures', 'Textures.RemoveTexture'])
 
+    def test_missing_names_wait_for_a_restart(self):
+        names = lambda i, *a: '' if i == 30026 else kodi.ADDON.getLocalizedString(i)
+        with mock.patch.object(kodi, 'L', names), mock.patch.object(self.client, 'image', lambda *a: self.fail('fetched')):
+            self.assertEqual(tiles.refresh(self.client, xbmc.Monitor()), 0)
+        self.assertTrue(tiles.due())                         # tried again later
+        self.assertEqual(tiles.drawn('shuffle'), [])
+
     def test_off_draws_nothing(self):
         with mock.patch.dict(xbmcaddon.SETTINGS, {'tiles': 'false'}):
             self.assertFalse(tiles.due())
