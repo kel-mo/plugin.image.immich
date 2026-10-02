@@ -694,15 +694,51 @@ class Tiles(NoProxy):
         self.assertLess(halo, sum(plain.getpixel((x, tiles.SIZE // 2)) for x in range(first - 12, first)) * 0.6)
 
     @unittest.skipUnless(PIL, 'needs PIL')
-    def test_one_text_size_fits_the_longest_name(self):
+    def test_one_text_size_fits_every_name(self):
+        from PIL import Image, ImageDraw
+        names = ['Places', 'On this day and more']
+        with mock.patch.object(tiles, 'font_file', lambda: (None, False)):
+            face, stroke = tiles.font(tiles.text_size(names))
+        draw = ImageDraw.Draw(Image.new('L', (1, 1)))
+        for name in names:
+            for line in tiles.lines(draw, name, face, stroke).split('\n'):
+                self.assertLessEqual(draw.textbbox((0, 0), line, font=face, stroke_width=stroke)[2], tiles.SIZE * 0.8)
+
+    @unittest.skipUnless(PIL, 'needs PIL')
+    def test_long_names_wrap_rather_than_shrink(self):
         from PIL import Image, ImageDraw
         with mock.patch.object(tiles, 'font_file', lambda: (None, False)):
-            size = tiles.text_size(['Places', 'On this day and more'])
+            self.assertEqual(tiles.text_size(['Search', 'Smart collections']), tiles.text_size(['collections']))
+            self.assertLess(tiles.text_size(['Search', 'Supercalifragilistic']), tiles.text_size(['Search']))
+            size = tiles.text_size(['Search', 'Smart collections'])
             face, stroke = tiles.font(size)
-        draw = ImageDraw.Draw(Image.new('L', (1, 1)))
-        self.assertLessEqual(draw.textbbox((0, 0), 'On this day and more', font=face, stroke_width=stroke)[2],
-                             tiles.SIZE * 0.8)
-        self.assertLess(size, tiles.text_size(['Places']))
+            draw = ImageDraw.Draw(Image.new('L', (1, 1)))
+            self.assertEqual(tiles.lines(draw, 'Smart collections', face, stroke), 'Smart\ncollections')
+            self.assertEqual(tiles.lines(draw, 'Search', face, stroke), 'Search')
+
+    @unittest.skipUnless(PIL, 'needs PIL')
+    def test_halo_sits_on_wrapped_lines(self):
+        from PIL import Image, ImageDraw
+        with mock.patch.object(tiles, 'font_file', lambda: (None, False)):
+            size = tiles.text_size(['Favourites', 'On this day'])
+            face, stroke = tiles.font(size)
+        mask = Image.new('L', (tiles.SIZE, tiles.SIZE))
+        draw = ImageDraw.Draw(mask)
+        text = tiles.lines(draw, 'On this day', face, stroke)
+        self.assertIn('\n', text)
+        draw.text((100, 100), text, font=face, fill=255, stroke_width=stroke, align='center')
+        glyphs = mask.getbbox()
+        halo = tiles.halo((100, 100), text, face, stroke, size).point(lambda v: 255 if v > 40 else 0).getbbox()
+        top, bottom = glyphs[1] - halo[1], halo[3] - glyphs[3]
+        self.assertLessEqual(abs(top - bottom), 3)           # as far past the last line as the first
+
+    def test_a_refresh_past_midnight_keeps_its_day(self):
+        with mock.patch.object(tiles, 'render', lambda data, label, dest, size: open(dest, 'wb').close()), \
+                mock.patch.object(kodi, 'jsonrpc', lambda *a, **k: {}), \
+                mock.patch.object(tiles, 'drawing', lambda day=None: (day or 'tomorrow') + ' v'):
+            tiles.refresh(self.client, xbmc.Monitor())
+        with open(tiles.stamp()) as f:
+            self.assertEqual(f.read(), date.today().isoformat() + ' v')
 
     def test_skin_bold_font_first(self):
         skin = tempfile.mkdtemp()
@@ -751,14 +787,6 @@ class Tiles(NoProxy):
         with open(tiles.stamp(), 'w') as f:
             f.write(date.today().isoformat())                # as 0.3.1 and 0.3.2 wrote it
         self.assertTrue(tiles.due())
-
-    def test_a_refresh_past_midnight_keeps_its_day(self):
-        with mock.patch.object(tiles, 'render', lambda data, label, dest, size: open(dest, 'wb').close()), \
-                mock.patch.object(kodi, 'jsonrpc', lambda *a, **k: {}), \
-                mock.patch.object(tiles, 'drawing', lambda day=None: (day or 'tomorrow') + ' v'):
-            tiles.refresh(self.client, xbmc.Monitor())
-        with open(tiles.stamp()) as f:
-            self.assertEqual(f.read(), date.today().isoformat() + ' v')
 
     def test_off_draws_nothing(self):
         with mock.patch.dict(xbmcaddon.SETTINGS, {'tiles': 'false'}):
