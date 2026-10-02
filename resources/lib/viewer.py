@@ -24,6 +24,9 @@ LOAD_WAIT = 10                           # seconds a photo stays up waiting for 
 AHEAD = 3                                # photos whose details are fetched in the background
 EASE_PEAK = 0.3                          # motion is fastest here: quick to start, long to settle
 SUPERSAMPLE = 2 ** 0.5                   # moving photos decode this much larger, then mipmaps shrink them smoothly
+SETTLE = 1.5                             # seconds a paused photo takes to ease back to rest
+SWAP = 0.6                               # seconds a paused photo's sharp still takes to fade in or out
+DECODE_WAIT = 1.5                        # seconds Kodi may still be decoding after the proxy has sent a photo
 CLOSE = {9, 10, 13, 92}                  # parent dir, previous menu, stop, back
 PAUSE = {7, 12, 79, 229}                 # select, pause, play, play/pause
 NEXT = {2, 14, 77}                       # right, next item, fast forward
@@ -151,8 +154,9 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.show_info()
         self.setProperty('immich.clock', 'true' if kodi.setting_bool('clock') else 'false')
         self.layers = [[self.getControl(base + k) for k in range(4)] for base in (100, 200)]
-        for layer in self.layers:
-            layer[0].setAnimations([anim('fade', start=0, end=0, time=0)])
+        self.stills = [self.getControl(k) for k in (400, 402, 403)]
+        for group in [layer[0] for layer in self.layers] + self.stills[:1]:
+            group.setAnimations([anim('fade', start=0, end=0, time=0)])
         self.shown = None                   # layer on screen
         self.prepared = {}                  # layer -> (asset index, fills screen)
         self.waiting = {}                   # layer -> (photo the proxy will announce, since when)
@@ -162,7 +166,10 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.next_at = None
         self.kb = None
         self.main = None
-        self.left = self.stay                       # slide time still to run while paused
+        self.anchor = None                  # the point the moving photo is outsized around
+        self.still = None                   # a paused photo's screen-sized copy: control, photo, since, arrived, shown
+        self.still_at = None
+        self.unstill = None                 # (control, when) to let go of a still's texture once faded out
 
     # --------------------------------------------------------------- slides
     def free_layer(self):
@@ -242,8 +249,10 @@ class Viewer(xbmcgui.WindowXMLDialog):
     def ready(self, layer, now):
         """Whether the photo prepared in layer has arrived, or has been waited on long enough."""
         name, since = self.waiting.get(layer, (None, 0))
-        if name is None or now - since >= LOAD_WAIT:
-            return True
+        return name is None or now - since >= LOAD_WAIT or self.arrived(name, since)
+
+    def arrived(self, name, since):
+        """Whether the proxy has sent this photo since then."""
         for entry in xbmcgui.Window(10000).getProperty(proxy.DONE).split():
             done, _, at = entry.rpartition('@')
             if done == name and float(at) >= since - 1:
@@ -282,6 +291,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         asset = self.assets[self.index]
         fade = fade or self.fade
         self.stop_video()
+        self.hide_still(fade)
         self.caption(asset)
         if self.shown is not None:
             self.layers[self.shown][0].setAnimations([anim('fade', start=100, end=0, time=fade)])
@@ -299,6 +309,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
             main.setAnimations([anim('zoom', start=rest, end=rest, center='960,540', time=0)])
         elif self.scale > 1:
             self.outsize(main)
+            self.anchor = (960, 540)
             main.setAnimations([anim('zoom', start=self.shrink(100), end=self.shrink(100), center='960,540', time=0)])
         else:
             main.setAnimations([])
@@ -310,24 +321,30 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.shown_at = time.time()
         self.preload_at = self.shown_at + fade / 1000.0 + 0.3
         self.next_at = self.shown_at + self.stay + fade / 1000.0
-        if not self.playing:
-            self.left = self.stay + fade / 1000.0
+        self.still_at = self.preload_at if not self.playing and self.scale > 1 and asset['image'] else None
         if not asset['image']:
             # start once the poster is up
             self.video = {'id': asset['id'], 'at': self.shown_at + fade / 1000.0 + 0.3, 'started': False}
             self.next_at = None
 
-    def pan_zoom(self, main, fade):
-        """Slow zoom in or out around a random focal point, spanning the fades on both ends."""
+    def pan_zoom(self, main, fade, resume=False, delay=0):
+        """Slow zoom in or out around a random focal point, spanning the fades on both ends.
+        A resume zooms in from rest, gently, over a whole slide time, around where the photo already sits."""
         if self.pans(self.assets[self.index]):
-            return self.pan(main, fade)
+            return self.pan(main, fade, resume, delay)
         top = 100 * self.top(self.assets[self.index], cover=any(main is layer[2] for layer in self.layers))
-        start, end = (100, top) if random.random() < 0.6 else (top, 100)
-        cx, cy = random.randint(480, 1440), random.randint(270, 810)
-        if self.scale > 1:
-            self.outsize(main, cx, cy)
+        start, end = (100, top) if resume or random.random() < 0.6 else (top, 100)
+        if resume and self.anchor:
+            cx, cy = self.anchor                    # moving it now would jump
+        else:
+            cx, cy = random.randint(480, 1440), random.randint(270, 810)
+            if self.scale > 1:
+                self.outsize(main, cx, cy)
+        self.anchor = (cx, cy)
+        ms = self.stay * 1000 + (fade if resume else 2 * fade)
         self.kb = {'ctrl': main, 'zoom': (start, end), 'center': '{},{}'.format(cx, cy), 'f': 0.0,
-                   'easing': 'skew', 't0': time.time(), 'time': int((self.stay * 1000 + 2 * fade) * 1.1)}
+                   'easing': 'inout' if resume else 'skew', 't0': time.time() + delay / 1000.0,
+                   'time': int(ms * 1.1), 'delay': delay}
         self.move()
 
     def pans(self, asset):
@@ -355,23 +372,26 @@ class Viewer(xbmcgui.WindowXMLDialog):
         shown = (cover_size if cover else fit_size)(asset['ratio'])[1] * gui_height() / 1080.0
         return min(want, max(1.0, h / shown))
 
-    def span(self, control, ratio):
+    def span(self, control, ratio, scale=None):
         """The whole photo cropped to fill the screen, at the pan's largest: decoded that big, only ever shrunk."""
+        scale = self.scale if scale is None else scale
         w, h = cover_size(ratio)
-        control.setPosition(round(960 - w * self.scale / 2), round(540 - h * self.scale / 2))
-        control.setWidth(round(w * self.scale))
-        control.setHeight(round(h * self.scale))
+        control.setPosition(round(960 - w * scale / 2), round(540 - h * scale / 2))
+        control.setWidth(round(w * scale))
+        control.setHeight(round(h * scale))
 
-    def pan(self, main, fade):
-        """One eased pan at a calm speed across what cropping hides, with a gentle zoom."""
+    def pan(self, main, fade, resume=False, delay=0):
+        """One eased pan at a calm speed across what cropping hides, with a gentle zoom; a resume starts centred."""
         w, h = cover_size(self.assets[self.index]['ratio'])
-        ms = int((self.stay * 1000 + 2 * fade) * 1.2)
+        ms = int((self.stay * 1000 + (fade if resume else 2 * fade)) * 1.2)
         reach = PAN_SPEED * 1920 * ms / 2000.0            # half the travel
         dx, dy = min(max(w - 1920, 0) / 2, reach), min(max(h - 1080, 0) / 2, reach)
         sign = random.choice((-1, 1))
-        self.kb = {'ctrl': main, 'pan': ((-sign * dx, -sign * dy), (sign * dx, sign * dy)), 'center': '960,540',
+        start = (0, 0) if resume else (-sign * dx, -sign * dy)
+        self.kb = {'ctrl': main, 'pan': (start, (sign * dx, sign * dy)), 'center': '960,540',
                    'top': self.top(self.assets[self.index], cover=True),
-                   'f': 0.0, 'easing': 'skew', 't0': time.time(), 'time': ms}
+                   'f': 0.0, 'easing': 'inout' if resume else 'skew', 't0': time.time() + delay / 1000.0, 'time': ms,
+                   'delay': delay}
         self.move()
 
     def state(self, f):
@@ -399,6 +419,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
                 za, zb = 100, round(100 * zb / za, 3)
                 if sb is not None:
                     sa, sb = (0, 0), (round(sb[0] - sa[0], 3), round(sb[1] - sa[1], 3))
+            delay += kb.get('delay', 0)
             extra = {'delay': delay} if delay else {}
             anims.append(anim('zoom', start=za, end=zb, center=kb['center'], time=ms, tween='sine', easing=easing,
                               **extra))
@@ -407,39 +428,68 @@ class Viewer(xbmcgui.WindowXMLDialog):
                                   tween='sine', easing=easing, **extra))
         kb['ctrl'].setAnimations(anims)
 
-    def outsize(self, control, cx=960, cy=540):
+    def outsize(self, control, cx=960, cy=540, scale=None):
         """The screen scaled by the zoom around (cx, cy): the photo is decoded that big and only ever shrunk."""
-        control.setPosition(round(cx * (1 - self.scale)), round(cy * (1 - self.scale)))
-        control.setWidth(round(1920 * self.scale))
-        control.setHeight(round(1080 * self.scale))
+        scale = self.scale if scale is None else scale
+        control.setPosition(round(cx * (1 - scale)), round(cy * (1 - scale)))
+        control.setWidth(round(1920 * scale))
+        control.setHeight(round(1080 * scale))
 
     def shrink(self, percent):
         """An on-screen zoom as a zoom of the outsized control."""
         return round(percent / self.scale, 3)
 
-    def freeze(self):
-        """Kodi can't pause an animation, so hold it at where the motion has got to."""
+    def settle(self):
+        """Paused: ease back from where the motion has got to, to the whole photo at rest."""
         kb = self.kb
         if not kb:
             return
-        done = min((time.time() - kb['t0']) * 1000 / max(kb['time'], 1), 1.0)
-        kb['f'] += (1 - kb['f']) * ease(done, kb['easing'])
-        kb['time'] *= 1 - done
-        kb['easing'] = 'out'                        # carries on decelerating from here
-        zoom, slide = self.state(kb['f'])
-        held = [anim('zoom', start=zoom, end=zoom, center=kb['center'], time=0)]
+        done = min(max((time.time() - kb['t0']) * 1000 / max(kb['time'], 1), 0.0), 1.0)
+        zoom, slide = self.state(kb['f'] + (1 - kb['f']) * ease(done, kb['easing']))
+        ms = SETTLE * 1000
+        anims = [anim('zoom', start=zoom, end=self.shrink(100), center=kb['center'], time=ms, tween='sine', easing='out')]
         if slide is not None:
-            held.append(anim('slide', start='{},{}'.format(*slide), end='{},{}'.format(*slide), time=0))
-        kb['ctrl'].setAnimations(held)
+            anims.append(anim('slide', start='{},{}'.format(*slide), end='0,0', time=ms, tween='sine', easing='out'))
+        kb['ctrl'].setAnimations(anims)
+        self.kb = None
 
     def thaw(self):
-        if self.kb is None:
-            if self.kenburns and self.main is not None:   # shown while paused: start moving now
-                self.pan_zoom(self.main, self.fade)
+        shown = self.hide_still()
+        if self.kenburns and self.main is not None:   # moves once the still has gone, or the two don't line up
+            self.pan_zoom(self.main, self.fade, resume=True, delay=SWAP * 1000 if shown else 0)
+
+    def sharpen(self):
+        """Paused at rest: a screen-sized copy over the moving one, sharper than that shrunk."""
+        if self.playing or self.main is None or self.shown is None:
             return
-        if self.kb['time'] > 0:
-            self.kb['t0'] = time.time()
-            self.move()
+        asset = self.assets[self.index]
+        if self.unstill:
+            self.unstill[0].setImage('')
+            self.unstill = None
+        ctrl = self.stills[1 if self.main is self.layers[self.shown][2] else 2]
+        if self.pans(asset):
+            self.span(ctrl, asset['ratio'], 1.0)
+        else:
+            self.outsize(ctrl, scale=1.0)
+        url = self.client.thumb_url(asset['id'], asset['shown_size'])
+        proxy.forget_cached(url)
+        ctrl.setImage(url, False)
+        self.still = {'ctrl': ctrl, 'name': '{}:{}'.format(asset['id'], asset['shown_size']), 'since': time.time(),
+                      'arrived': None, 'shown': False}
+
+    def show_still(self):
+        """Fades in over an identical photo, so one not yet decoded only shows the moving copy through."""
+        self.still['shown'] = True
+        self.stills[0].setAnimations([anim('fade', start=0, end=100, time=SWAP * 1000)])
+
+    def hide_still(self, ms=SWAP * 1000):
+        still, self.still, self.still_at = self.still, None, None
+        if not still:
+            return False
+        if still['shown']:
+            self.stills[0].setAnimations([anim('fade', start=100, end=0, time=ms)])
+        self.unstill = (still['ctrl'], time.time() + ms / 1000.0 + 0.2)
+        return still['shown']
 
     def show_info(self):
         self.setProperty('immich.captions', 'true' if self.info else 'false')
@@ -525,12 +575,13 @@ class Viewer(xbmcgui.WindowXMLDialog):
             now = time.time()
             self.playing = not self.playing
             self.setProperty('immich.status', '' if self.playing else kodi.L(30700))
-            if self.playing:
+            if self.playing:                        # a resume starts the slide afresh, from rest
                 self.thaw()
-                self.next_at = now + max(self.left, 1.0)
+                self.next_at = now + self.stay + (self.kb or {}).get('delay', 0) / 1000.0
             else:
-                self.freeze()
-                self.left = (self.next_at - now) if self.next_at else self.stay
+                self.settle()
+                if self.scale > 1 and self.main is not None:
+                    self.still_at = now + SETTLE + 0.3
         elif action in INFO:
             self.info = (self.info + 1) % 3
             self.show_info()
@@ -557,6 +608,17 @@ class Viewer(xbmcgui.WindowXMLDialog):
                 self.poll_video()
             elif self.playing and self.next_at and now >= self.next_at and self.ready(self.free_layer(), now):
                 self.display(self.index + 1)
+            if self.still_at and now >= self.still_at:
+                self.still_at = None
+                self.sharpen()
+            elif self.still and not self.still['shown']:
+                if self.still['arrived'] is None and self.arrived(self.still['name'], self.still['since']):
+                    self.still['arrived'] = now
+                elif self.still['arrived'] is not None and now - self.still['arrived'] >= DECODE_WAIT:
+                    self.show_still()
+            if self.unstill and now >= self.unstill[1]:
+                self.unstill[0].setImage('')
+                self.unstill = None
             if self.shown is not None and self.preload_at and now >= self.preload_at:
                 self.preload_at = None
                 nxt = (self.index + 1) % len(self.assets)
