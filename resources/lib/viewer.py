@@ -364,13 +364,14 @@ class Viewer(xbmcgui.WindowXMLDialog):
         return h
 
     def top(self, asset, cover):
-        """The most this photo may zoom: the setting, but never past one original pixel per screen pixel."""
+        """The most this photo may zoom: the setting, but never past one original pixel per screen pixel.
+        One already shown larger than that, such as a preview on a 4K screen, zooms anyway rather than sit still."""
         want = self.zoom / 100.0
         h = self.source_height(asset)
         if h is None:
             return want
-        shown = (cover_size if cover else fit_size)(asset['ratio'])[1] * gui_height() / 1080.0
-        return min(want, max(1.0, h / shown))
+        pixels = h / ((cover_size if cover else fit_size)(asset['ratio'])[1] * gui_height() / 1080.0)
+        return want if pixels < 1 else min(want, pixels)
 
     def span(self, control, ratio, scale=None):
         """The whole photo cropped to fill the screen, at the pan's largest: decoded that big, only ever shrunk."""

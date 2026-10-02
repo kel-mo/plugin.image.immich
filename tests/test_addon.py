@@ -598,10 +598,11 @@ class KenBurns(NoProxy):
         self.assertEqual(sorted(main.net_zoom()), [net(100), net(100 * (2200 / 2160))])
         self.assertTrue(main.net_slide())
 
-    def test_preview_limits_zoom(self):
+    def test_enlarged_preview_still_zooms(self):
         main = self.viewer(height='2160', ratio=4 / 3, size=(4080, 3060))
-        start, end = main.net_zoom()                       # a 1440 preview is already past one to one
-        self.assertEqual((start, end), (net(100),) * 2)
+        self.assertEqual(sorted(main.net_zoom()), [net(100), net(110)])   # a 1440 preview is already past one to one
+        main = self.viewer(height='2160', ratio=0.75, size=(3060, 4080))    # a rotated phone portrait
+        self.assertEqual(sorted(main.net_zoom()), [net(100), net(110)])
 
     def test_unknown_size_uses_setting(self):
         main = self.viewer(height='2160')
