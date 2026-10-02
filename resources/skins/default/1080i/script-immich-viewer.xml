@@ -53,6 +53,22 @@
       </control>
     </control>
 
+    <!-- a paused photo's sharp still, decoded at screen size, over the layer it was moving in -->
+    <control type="group" id="400">
+      <control type="image" id="402">
+        <width>1920</width>
+        <height>1080</height>
+        <aspectratio>scale</aspectratio>
+        <texture diffuse="edge.png"/>
+      </control>
+      <control type="image" id="403">
+        <width>1920</width>
+        <height>1080</height>
+        <aspectratio>keep</aspectratio>
+        <texture diffuse="edge.png"/>
+      </control>
+    </control>
+
     <control type="videowindow" id="2">
       <width>1920</width>
       <height>1080</height>

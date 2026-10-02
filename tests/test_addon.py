@@ -474,19 +474,104 @@ class KenBurns(NoProxy):
         self.assertEqual(main.slides(), [])
         self.assertEqual(main.zooms()[-1:], [(round(100 / OUT, 3), round(100 / OUT, 3), '960,540')])
 
-    def test_pan_holds_where_it_got_to(self):
-        main = self.viewer(ratio=3.92)
-        kb = self.window.kb
-        kb['t0'] -= kb['time'] / 2000.0                     # half way through
-        self.window.freeze()
-        self.assertTrue(main.net_slide(), 'no pan held')
-        (x0, _), (x1, _) = main.net_slide()
-        done = viewer.ease(0.5, 'skew')                     # share of the way at half the time
-        (d0, _), (d1, _) = self.window.kb['pan']
-        self.assertEqual((round(x0, 1), round(x1, 1)), (round(d0 + (d1 - d0) * done, 1),) * 2)
-        zoom = main.net_zoom()
-        self.assertAlmostEqual(zoom[0], 100 * (1 + 0.1 * done) / OUT, delta=0.05)
-        self.assertEqual(zoom[0], zoom[1])
+    def test_pause_eases_back_to_rest(self):
+        for ratio in (16 / 9, 3.92):                        # zoom, then pan
+            main = self.viewer(ratio=ratio)
+            kb = self.window.kb
+            kb['t0'] -= kb['time'] / 2000.0                 # half way through
+            mid = self.window.state(viewer.ease(0.5, 'skew'))
+            self.window.settle()
+            legs = main.last()
+            self.assertEqual({(f['tween'], f['easing'], f['time']) for f in legs}, {('sine', 'out', '1500')})
+            zoom = next(f for f in legs if f['effect'] == 'zoom')
+            self.assertEqual((float(zoom['start']), float(zoom['end'])), (mid[0], round(100 / OUT, 3)))
+            slide = [f['end'] for f in legs if f['effect'] == 'slide']
+            self.assertEqual(slide, ['0,0'] if ratio > 3 else [])
+            self.assertIsNone(self.window.kb)
+
+    def test_resume_starts_gently_from_rest(self):
+        for ratio in (16 / 9, 3.92):
+            main = self.viewer(ratio=ratio)
+            self.window.settle()
+            self.window.stay = 3
+            self.window.thaw()
+            legs = [f for f in main.last() if f['effect'] in ('zoom', 'slide')]
+            self.assertEqual({(f['tween'], f['easing']) for f in legs}, {('sine', 'inout')})
+            self.assertFalse([f for f in legs if 'delay' in f])
+            self.assertEqual(main.net_zoom()[0], net(100))
+            if ratio > 3:
+                self.assertEqual(main.net_slide()[0], (0.0, 0.0))
+            else:
+                self.assertEqual(int(legs[0]['time']), int((3000 + self.window.fade) * 1.1))
+
+    def still(self, **kw):
+        self.viewer(playing=False, **kw)
+        window = self.window
+        with mock.patch.object(window.monitor, 'waitForAbort', lambda s: False):
+            window.sharpen()
+        return window
+
+    def test_paused_photo_gets_a_sharp_still(self):
+        window = self.still()
+        cover = window.stills[1]
+        self.assertIs(window.still['ctrl'], cover)
+        self.assertEqual([c for c in cover.calls if c[0] in ('setPosition', 'setWidth', 'setHeight')],
+                         [('setPosition', 0, 0), ('setWidth', 1920), ('setHeight', 1080)])
+        self.assertTrue([c for c in cover.calls if c[0] == 'setImage' and c[1]])
+        self.assertIsNotNone(window.preload_at)             # the next photo still loads behind
+
+    def test_paused_panorama_still_spans(self):
+        window = self.still(ratio=3.92)
+        fit = window.stills[2]
+        self.assertIs(window.still['ctrl'], fit)
+        self.assertIn(('setWidth', round(1080 * 3.92)), fit.calls)
+
+    def test_resume_gives_a_whole_slide(self):
+        self.viewer()
+        window = self.window
+        window.next_at = time.time() + 0.5                  # nearly over when paused
+        window.handle(12)
+        window.handle(12)
+        self.assertAlmostEqual(window.next_at - time.time(), window.stay, delta=0.1)
+        window.handle(12)
+        window.still = {'ctrl': window.stills[1], 'name': '', 'since': 0, 'arrived': None, 'shown': True}
+        window.handle(12)                                   # waits for the still to fade first
+        self.assertAlmostEqual(window.next_at - time.time(), window.stay + viewer.SWAP, delta=0.1)
+
+    def test_paused_slide_schedules_the_still(self):
+        self.viewer(playing=False)
+        self.assertEqual(self.window.still_at, self.window.preload_at)
+        self.viewer(playing=False, smooth=False)
+        self.assertIsNotNone(self.window.still_at)          # still outsized by the zoom
+        self.viewer(playing=False, kenburns=False)
+        self.assertIsNone(self.window.still_at)
+
+    def test_still_fades_over_the_moving_photo(self):
+        window = self.still()
+        window.show_still()
+        (fade,) = window.stills[0].last()
+        self.assertEqual((fade['start'], fade['end'], fade['time']), ('0', '100', '600'))
+        layers = [len(layer[0].calls) for layer in window.layers]
+        moves = len(window.main.calls)
+        window.stay = 3
+        window.thaw()
+        legs = [f for f in window.main.last() if f['effect'] == 'zoom']
+        self.assertEqual({(f['delay'], f['center']) for f in legs}, {('600', '960,540')})   # after the still, in place
+        self.assertFalse([c for c in window.main.calls[moves:] if c[0] == 'setPosition'])
+        (fade,) = window.stills[0].last()
+        self.assertEqual((fade['start'], fade['end'], fade['time']), ('100', '0', '600'))
+        self.assertEqual([len(layer[0].calls) for layer in window.layers], layers)   # photo layers untouched
+        self.assertIsNone(window.still)
+        self.assertIs(window.unstill[0], window.stills[1])  # texture let go once faded
+        self.assertEqual(window.main.net_zoom()[0], net(100))
+
+    def test_next_photo_fades_the_still_with_it(self):
+        window = self.still()
+        window.show_still()
+        with mock.patch.object(window.monitor, 'waitForAbort', lambda s: False):
+            window.display(1, 500)
+        (fade,) = window.stills[0].last()
+        self.assertEqual((fade['start'], fade['end'], fade['time']), ('100', '0', '500'))
 
     def test_motion_rises_fast_and_settles_slowly(self):
         for ratio in (16 / 9, 3.92):                        # zoom, then pan
@@ -527,17 +612,6 @@ class KenBurns(NoProxy):
             spec = viewer.anim('zoom', start=100, end=110, time=1000, delay=300)[1]
         f = dict(p.split('=', 1) for p in spec.split() if '=' in p)
         self.assertEqual((f['time'], f['delay']), ('2000', '600'))
-
-    def test_resume_settles(self):
-        main = self.viewer(ratio=3.92)
-        kb = self.window.kb
-        kb['t0'] -= kb['time'] / 4000.0                     # a quarter through
-        self.window.freeze()
-        left = kb['time']
-        self.window.thaw()
-        legs = [f for f in main.last() if f['effect'] in ('zoom', 'slide')]
-        self.assertEqual({(f['tween'], f['easing'], int(f['time'])) for f in legs}, {('sine', 'out', int(left))})
-        self.assertFalse([f for f in legs if 'delay' in f])
 
 
 class Loading(NoProxy):
