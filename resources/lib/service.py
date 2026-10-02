@@ -10,6 +10,7 @@ from .api import ImmichClient, clean_url
 TILE_START = 30                          # seconds after start before drawing tiles, so Kodi settles first
 TILE_CHECK = 60                          # seconds between checks for a new day or the setting turned on
 TILE_RETRY = 900                         # seconds to wait after the server gave no photos
+TILE_TIMEOUT = 10                        # seconds per tile request, so one under way can't hold up Kodi's exit for long
 
 
 class Monitor(xbmc.Monitor):
@@ -36,7 +37,7 @@ def run():
             url, key = kodi.fresh_setting('server_url'), kodi.fresh_setting('api_key')
             if url and key and tiles.due():
                 try:
-                    if not tiles.refresh(ImmichClient(url, key), monitor):
+                    if not tiles.refresh(ImmichClient(url, key, timeout=TILE_TIMEOUT), monitor):
                         wait = TILE_RETRY
                 except Exception:                   # never take the proxy down with it
                     kodi.log('tiles failed: {}'.format(traceback.format_exc()), xbmc.LOGWARNING)

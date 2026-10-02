@@ -788,6 +788,23 @@ class Tiles(NoProxy):
             f.write(date.today().isoformat())                # as 0.3.1 and 0.3.2 wrote it
         self.assertTrue(tiles.due())
 
+    def test_service_draws_with_a_short_timeout_and_points_favourites_on_exit(self):
+        seen, order = [], []
+        class Monitor:                                      # one check, then Kodi exits
+            waits = iter([False, True])
+            def __init__(self, server): pass
+            def waitForAbort(self, t): return next(self.waits)
+            def abortRequested(self): return False
+        with mock.patch.object(proxy, 'start', lambda: object()), mock.patch.object(proxy, 'stop', lambda s: order.append('stop')), \
+                mock.patch.object(proxy, 'forget_keyed_textures', lambda: None), \
+                mock.patch.object(proxy, 'forget_cached_photos', lambda: None), \
+                mock.patch.object(service, 'Monitor', Monitor), mock.patch.object(tiles, 'due', lambda: True), \
+                mock.patch.object(tiles, 'refresh', lambda client, monitor: seen.append(client.timeout) or 1), \
+                mock.patch.object(tiles, 'point_favourites', lambda: order.append('favourites')):
+            service.run()
+        self.assertEqual(seen, [service.TILE_TIMEOUT])
+        self.assertEqual(order, ['favourites', 'stop'])
+
     def test_off_draws_nothing(self):
         with mock.patch.dict(xbmcaddon.SETTINGS, {'tiles': 'false'}):
             self.assertFalse(tiles.due())
