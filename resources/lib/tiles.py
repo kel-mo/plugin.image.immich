@@ -7,7 +7,6 @@ import re
 import time
 import xml.etree.ElementTree as ET
 from datetime import date
-from urllib.parse import quote
 
 import xbmcvfs
 
@@ -257,9 +256,8 @@ def tidy():
 
 def forget():
     """Drop Kodi's cached copies of our tiles; it keeps them for a day and would never look at deleted ones again."""
-    tag = quote('{}/tiles/'.format(kodi.ADDON_ID), safe='').replace('%2F', '%2f')   # as Kodi writes image:// paths
-    found = kodi.jsonrpc('Textures.GetTextures', properties=['url'], filter={'field': 'url', 'operator': 'contains',
-                                                                              'value': tag})
+    found = kodi.jsonrpc('Textures.GetTextures', properties=['url'],                 # Kodi keys plain files by path
+                         filter={'field': 'url', 'operator': 'contains', 'value': '{}/tiles/'.format(kodi.ADDON_ID)})
     for t in (found or {}).get('textures') or []:
         kodi.jsonrpc('Textures.RemoveTexture', textureid=t['textureid'])
 
