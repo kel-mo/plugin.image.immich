@@ -802,6 +802,7 @@ class Tiles(NoProxy):
             service.run()
         self.assertEqual(seen, [service.TILE_TIMEOUT])
         self.assertEqual(order, ['stop'])
+        self.assertLessEqual(service.TILE_TIMEOUT, 4)                 # Kodi kills a service still running after five
 
     def test_off_draws_nothing(self):
         with mock.patch.dict(xbmcaddon.SETTINGS, {'tiles': 'false'}):

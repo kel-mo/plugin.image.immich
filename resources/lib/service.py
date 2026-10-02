@@ -10,7 +10,7 @@ from .api import ImmichClient, clean_url
 TILE_START = 30                          # seconds after start before drawing tiles, so Kodi settles first
 TILE_CHECK = 60                          # seconds between checks for a new day or the setting turned on
 TILE_RETRY = 900                         # seconds to wait after the server gave no photos
-TILE_TIMEOUT = 10                        # seconds per tile request, so one under way can't hold up Kodi's exit for long
+TILE_TIMEOUT = 4                         # seconds per tile request: one under way ends inside Kodi's five-second wait at exit
 
 
 class Monitor(xbmc.Monitor):
