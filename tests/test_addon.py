@@ -779,11 +779,33 @@ class Screensaver(NoProxy):
             group = next(c for c in root.iter('control') if c.get('id') == gid)
             self.assertTrue(any(top in (a.get('condition') or '') for a in group.findall('animation')))
         for label in ('immich.date', 'System.Time'):        # one copy for each side
-            sides = [c.findtext('visible') for c in root.iter('control') if label in (c.findtext('label') or '')]
+            sides = [c.findtext('visible') for c in root.iter('control')
+                     if label in (c.findtext('label') or '') and c.findtext('textcolor') == 'DDFFFFFF']
             self.assertTrue(all(right in v for v in sides))
             self.assertEqual(sorted('!String.IsEqual({})'.format(right) in v for v in sides), [False, True])
-        shades = [c.find('texture') for c in root.iter('control') if c.findtext('texture') == 'shade.png']
-        self.assertEqual(sorted(t.get('flipy') or '' for t in shades), ['', 'true'])     # one for each edge
+
+    def test_skin_outlines_the_text(self):
+        import xml.etree.ElementTree as ET
+        root = ET.parse(os.path.join(ROOT, 'resources', 'skins', 'default', '1080i', 'script-immich-viewer.xml'))
+        groups = [root.find('controls')] + [c for c in root.iter('control') if c.get('type') == 'group']
+        outlined = []
+        for group in groups:
+            labels = [c for c in group if c.get('type') == 'label']
+            texts = [c for c in labels if c.findtext('textcolor') == 'DDFFFFFF']
+            outlined += [c.findtext('label') for c in texts]
+            for text in texts:
+                copies = labels[labels.index(text) - 28:labels.index(text)]    # halo and dark ring, drawn first
+                self.assertEqual({c.findtext('textcolor') for c in copies}, {'40000000', 'DD000000'})
+                for c in copies:
+                    for tag in ('label', 'visible', 'font', 'align', 'width', 'height'):
+                        self.assertEqual(c.findtext(tag), text.findtext(tag))
+                    self.assertEqual([a.attrib for a in c.findall('animation')], [a.attrib for a in text.findall('animation')])
+                    for tag in ('left', 'right', 'top'):
+                        if text.find(tag) is not None:
+                            self.assertLessEqual(abs(int(c.findtext(tag)) - int(text.findtext(tag))), 4)
+                self.assertIsNone(text.find('shadowcolor'))
+        for prop in ('immich.date', 'immich.place', 'immich.position', 'System.Time', 'immich.status'):
+            self.assertTrue(any(prop in label for label in outlined), prop)
 
     def test_viewer_window_is_freed(self):
         import gc
