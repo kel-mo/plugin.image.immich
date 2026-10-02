@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.image.immich" name="Immich" version="0.3.1" provider-name="kel-mo">
+<addon id="plugin.image.immich" name="Immich" version="0.3.2" provider-name="kel-mo">
   <requires>
     <import addon="xbmc.python" version="3.0.1"/>
   </requires>
@@ -16,7 +16,10 @@
     <license>GPL-2.0-or-later</license>
     <source>https://github.com/kel-mo/plugin.image.immich</source>
     <website>https://immich.app</website>
-    <news>v0.3.1
+    <news>v0.3.2
+- Shuffle everything gets a photo tile too
+- A soft shadow keeps tile names readable on bright photos
+v0.3.1
 - Photo tiles: the menu and Immich favourites show one of your photos with the folder's name, a new one each day
 - Rotated phone portraits zoom again on 4K screens
 v0.3.0
