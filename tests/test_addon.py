@@ -846,6 +846,65 @@ class Tiles(NoProxy):
             self.assertEqual(tiles.art('timeline'), kodi.ICON)
 
 
+class Covers(NoProxy):
+    """Years, months and countries show a photo, as cities do."""
+
+    def setUp(self):
+        super().setUp()
+        self.client = api.ImmichClient()
+        self.path = os.path.join(kodi.PROFILE, 'covers.json')
+        if os.path.exists(self.path):
+            os.remove(self.path)
+
+    def listing(self, call):
+        del xbmcplugin.ITEMS[:]
+        call()
+        return {li.label: li.art for _, li, _ in xbmcplugin.ITEMS}
+
+    def test_years_and_months_show_their_newest_photo(self):
+        buckets = self.client.timeline_buckets()
+        years = self.listing(lambda: plugin.timeline(self.client))
+        newest = {b['timeBucket'][:4]: b['timeBucket'] for b in sorted(buckets, key=lambda b: b['timeBucket'])}
+        for y, art in years.items():
+            first = next(a['id'] for a in self.client.timeline_bucket(newest[y]) if a['image'])
+            self.assertIn('/assets/{}/thumbnail'.format(first), art['thumb'], y)
+            self.assertIn('size=preview', art['fanart'])
+        year = max(years)
+        months = self.listing(lambda: plugin.timeline(self.client, year))
+        self.assertTrue(months)
+        for name, art in months.items():
+            self.assertIn('/assets/', art['thumb'], name)
+
+    def test_covers_are_kept_until_a_bucket_changes(self):
+        calls = []
+        real = self.client.timeline_bucket
+        with mock.patch.object(self.client, 'timeline_bucket', lambda key: calls.append(key) or real(key)):
+            buckets = self.client.timeline_buckets()
+            plugin.timeline(self.client)
+            fetched = len(calls)
+            plugin.timeline(self.client)                                     # from the cache
+            self.assertEqual(len(calls), fetched)
+            kept = kodi.read_json(self.path)
+            self.assertEqual(sorted(kept), sorted(set(b['timeBucket'] for b in buckets) & set(kept)))
+            kept[calls[0]][0] += 1                                           # a photo arrived
+            kodi.write_json(self.path, kept)
+            plugin.timeline(self.client)
+            self.assertEqual(calls[fetched:], [calls[0]])
+        gone = dict(kept, **{'1999-01-01T00:00:00.000Z': [1, 'x']})          # a bucket no longer in the timeline
+        kodi.write_json(self.path, gone)
+        with mock.patch.object(self.client, 'timeline_buckets', lambda: buckets[:1]):
+            plugin.timeline(self.client)
+        self.assertNotIn('1999-01-01T00:00:00.000Z', kodi.read_json(self.path))
+
+    def test_countries_show_a_city_photo(self):
+        countries = self.listing(lambda: plugin.places(self.client))
+        self.assertGreater(len(countries), 1)
+        for name, art in countries.items():
+            self.assertIn('/assets/', art['thumb'], name)
+        cities = self.listing(lambda: plugin.places(self.client, 'Australia'))
+        self.assertIn(countries['Australia']['thumb'], [a['thumb'] for a in cities.values()])
+
+
 class Loading(NoProxy):
     def viewer(self):
         window = make_viewer(api.ImmichClient().search_page(size=5)[0])

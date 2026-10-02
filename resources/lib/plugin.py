@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """plugin:// router and directory listings."""
 import json
+import os
 import random
 import traceback
 from datetime import date
@@ -51,6 +52,31 @@ def folder(label, action, icon=None, art=None, context=None, label2='', **params
 
 def count(n, one=30009, many=30010):
     return kodi.L(one) if n == 1 else kodi.L(many, n)
+
+
+def photo_art(client, asset_id):
+    """A photo as a folder's thumbnail and backdrop; nothing without one, so the icon stands in."""
+    if not asset_id:
+        return {}
+    thumb = client.thumb_url(asset_id)
+    return {'thumb': thumb, 'icon': thumb, 'fanart': client.thumb_url(asset_id, 'preview')}
+
+
+def covers(client, wanted, buckets):
+    """A photo for each wanted timeline bucket, its newest: kept in a cache keyed on the bucket's count,
+    so a listing fetches only buckets that have changed; buckets gone from the timeline are dropped."""
+    path = os.path.join(kodi.PROFILE, 'covers.json')
+    known = kodi.read_json(path, {})
+    found, fetched = {}, False
+    for b in wanted:
+        key = b['timeBucket']
+        if not known.get(key) or known[key][0] != b['count']:
+            known[key] = [b['count'], next((a['id'] for a in client.timeline_bucket(key) if a.get('image')), None)]
+            fetched = True
+        found[key] = known[key][1]
+    if fetched:
+        kodi.write_json(path, {b['timeBucket']: known[b['timeBucket']] for b in buckets if b['timeBucket'] in known})
+    return found
 
 
 def action_item(label, action, icon=None, **params):
@@ -122,20 +148,25 @@ def slideshow_menu(**source):
 def timeline(client, year=None):
     buckets = client.timeline_buckets()
     if not year:
-        years = {}
+        years, newest = {}, {}
         for b in buckets:
-            years[b['timeBucket'][:4]] = years.get(b['timeBucket'][:4], 0) + b['count']
+            y = b['timeBucket'][:4]
+            years[y] = years.get(y, 0) + b['count']
+            if y not in newest or b['timeBucket'] > newest[y]['timeBucket']:
+                newest[y] = b
+        cover = covers(client, newest.values(), buckets)
         for y in sorted(years, reverse=True):
-            folder(y, 'timeline', kodi.ICON, label2=count(years[y]),
+            folder(y, 'timeline', kodi.ICON, art=photo_art(client, cover[newest[y]['timeBucket']]), label2=count(years[y]),
                    context=slideshow_menu(source='year', year=y), year=y)
     else:
         xbmcplugin.setPluginCategory(HANDLE, year)
-        for b in buckets:
-            if b['timeBucket'].startswith(year):
-                name = '{} {}'.format(month_name(int(b['timeBucket'][5:7])), year)
-                folder(name, 'bucket', kodi.ICON, label2=count(b['count']),
-                       context=slideshow_menu(source='bucket', bucket=b['timeBucket']),
-                       bucket=b['timeBucket'], name=name)
+        months = [b for b in buckets if b['timeBucket'].startswith(year)]
+        cover = covers(client, months, buckets)
+        for b in months:
+            name = '{} {}'.format(month_name(int(b['timeBucket'][5:7])), year)
+            folder(name, 'bucket', kodi.ICON, art=photo_art(client, cover[b['timeBucket']]), label2=count(b['count']),
+                   context=slideshow_menu(source='bucket', bucket=b['timeBucket']),
+                   bucket=b['timeBucket'], name=name)
     end()
 
 
@@ -180,9 +211,9 @@ def places(client, country=None):
         country = ''
     if country is None and len(countries) > 1:
         for c in countries:
-            n = sum(1 for x in found if x[0] == c)
-            folder(c or kodi.L(30015), 'places', kodi.ICON, label2=count(n, 30020, 30016), country=c or NO_COUNTRY,
-                   name=c)
+            mine = sorted((x for x in found if x[0] == c), key=lambda x: x[2].lower())
+            folder(c or kodi.L(30015), 'places', kodi.ICON, art=photo_art(client, mine[0][3]), label2=count(len(mine), 30020, 30016),
+                   country=c or NO_COUNTRY, name=c)
         return end()
     if country is not None:
         xbmcplugin.setPluginCategory(HANDLE, country or kodi.L(30015))
@@ -190,9 +221,8 @@ def places(client, country=None):
         if country is not None and c != country:
             continue
         where = {'city': city, 'country': c}       # state is often missing on some of a city's photos
-        thumb = client.thumb_url(asset_id)
-        folder(city, 'place', art={'thumb': thumb, 'icon': thumb, 'fanart': client.thumb_url(asset_id, 'preview')},
-               label2=state, context=slideshow_menu(source='place', **where), name=city, **where)
+        folder(city, 'place', art=photo_art(client, asset_id), label2=state, context=slideshow_menu(source='place', **where),
+               name=city, **where)
     end()
 
 
@@ -207,9 +237,7 @@ def memories(client, year=None):
     for y, assets in found:
         cover = assets[0]['id']
         ago = kodi.L(30019) if now - y == 1 else kodi.L(30018, now - y)
-        folder(ago, 'memories', art={'thumb': client.thumb_url(cover), 'icon': client.thumb_url(cover),
-                                     'fanart': client.thumb_url(cover, 'preview')},
-               label2='{} · {}'.format(y, count(len(assets))),
+        folder(ago, 'memories', art=photo_art(client, cover), label2='{} · {}'.format(y, count(len(assets))),
                context=slideshow_menu(source='memories', year=y), year=y)
     end()
 
