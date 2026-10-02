@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.image.immich" name="Immich" version="0.3.2" provider-name="kel-mo">
+<addon id="plugin.image.immich" name="Immich" version="0.3.3" provider-name="kel-mo">
   <requires>
     <import addon="xbmc.python" version="3.0.1"/>
   </requires>
@@ -16,7 +16,10 @@
     <license>GPL-2.0-or-later</license>
     <source>https://github.com/kel-mo/plugin.image.immich</source>
     <website>https://immich.app</website>
-    <news>v0.3.2
+    <news>v0.3.3
+- Long tile names wrap onto two lines, so every name stays larger
+- Tiles redraw straight after an update
+v0.3.2
 - Shuffle everything gets a photo tile too
 - A soft shadow keeps tile names readable on bright photos
 v0.3.1
@@ -36,13 +39,7 @@ v0.2.6
 - A Ken Burns screensaver: On this day, random, favourites or a smart search
 v0.2.5
 - Photos glide between screen pixels on Kodi builds that support it, edges included
-- Photos shown again load at full resolution, not from Kodi 22's smaller cached copy
-v0.2.4
-- Ken Burns is subtler: a gentle zoom, 105% by default, that never enlarges past the original
-- Photos that do not fill the screen sit on the blurred backdrop; wide panoramas pan slowly instead
-- Motion starts quickly and settles slowly
-- Each photo waits for the next to arrive, so slow connections no longer fade to black
-- Zoom can be set from 101% to 110%</news>
+- Photos shown again load at full resolution, not from Kodi 22's smaller cached copy</news>
     <assets>
       <icon>resources/icon.png</icon>
     </assets>
