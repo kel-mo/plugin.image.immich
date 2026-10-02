@@ -207,6 +207,9 @@ def refresh(client, monitor):
     done, used = 0, set()
     # folders first, so On this day keeps a memory; the add-on's own tile takes what is left
     labels = [(k, kodi.L(i)) for k, i in FOLDERS.items()] + [(ROOT, kodi.L(30025))]   # favourites name the add-on beside it
+    if not all(label for _, label in labels):           # Kodi has this version's strings only after a restart
+        kodi.debug('tiles: names not loaded yet')
+        return 0
     size = text_size([label for _, label in labels])
     for key, label in labels:
         if monitor.abortRequested():
