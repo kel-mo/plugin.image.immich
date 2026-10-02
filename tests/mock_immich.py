@@ -212,8 +212,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authed({}):
             return self.send(401, {'message': 'Authentication required'})
         if u.path == '/api/search/random':
-            return self.send(200, [asset_dto(a) for a in random.sample(ASSETS, min(int(body.get('size') or 250),
-                                                                                  len(ASSETS)))])
+            items = filtered(body)
+            return self.send(200, [asset_dto(a) for a in random.sample(items, min(int(body.get('size') or 250),
+                                                                                 len(items)))])
         if u.path == '/api/search/metadata':
             return self.send(200, paged(filtered(body), body))
         if u.path == '/api/search/smart':

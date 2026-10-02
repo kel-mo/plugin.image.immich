@@ -110,6 +110,10 @@ msgctxt "#30024"
 msgid "Describe what you are looking for"
 msgstr ""
 
+msgctxt "#30025"
+msgid "Gallery"
+msgstr ""
+
 # Settings 30100-30599
 
 msgctxt "#30100"
@@ -230,6 +234,14 @@ msgstr ""
 
 msgctxt "#30302"
 msgid "Months and albums with more photos than this get a Next page entry."
+msgstr ""
+
+msgctxt "#30303"
+msgid "Photo tiles"
+msgstr ""
+
+msgctxt "#30304"
+msgid "Shows one of your photos, with the folder's name over it, on Immich's menu and on Immich favourites. A new photo each day. Favourites change the next time Kodi starts."
 msgstr ""
 
 msgctxt "#30400"

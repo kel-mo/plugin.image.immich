@@ -7,6 +7,8 @@ import tempfile
 import threading
 import time
 import unittest
+import xml.etree.ElementTree as ET
+from datetime import date
 from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest import mock
@@ -82,8 +84,9 @@ os.environ['IMMICH_KEY'] = mock_immich.KEY
 import xbmc
 import xbmcaddon
 import xbmcgui
+import xbmcplugin
 
-from resources.lib import api, kodi, plugin, proxy, service, signin, viewer
+from resources.lib import api, kodi, plugin, proxy, service, signin, tiles, viewer
 
 THUMBHASH = '1QcSHQRnh493V4dIh4eXh1h4kJUI'
 SCHEMES = {'immich': 'http://immich', 'immich:2283': 'http://immich:2283', 'photos.local': 'http://photos.local',
@@ -613,6 +616,173 @@ class KenBurns(NoProxy):
             spec = viewer.anim('zoom', start=100, end=110, time=1000, delay=300)[1]
         f = dict(p.split('=', 1) for p in spec.split() if '=' in p)
         self.assertEqual((f['time'], f['delay']), ('2000', '600'))
+
+
+try:
+    import PIL                                          # in Kodi's flatpak Python, not always on the host
+except ImportError:
+    PIL = None
+
+
+class Tiles(NoProxy):
+    def setUp(self):
+        super().setUp()
+        shutil.rmtree(tiles.tile_dir(), ignore_errors=True)
+        self.addCleanup(shutil.rmtree, tiles.tile_dir(), True)
+        self.client = api.ImmichClient()
+
+    def ids(self, assets):
+        return {a['id'] for a in assets}
+
+    def test_root_prefers_on_this_day(self):
+        memories = self.ids(a for _, assets in self.client.memories(date.today()) for a in assets)
+        self.assertIn(tiles.pick(self.client, tiles.ROOT, '2026-10-02')['id'], memories)
+
+    def test_root_falls_back_to_favourites(self):
+        with mock.patch.object(self.client, 'memories', lambda day: []):
+            picked = tiles.pick(self.client, tiles.ROOT, '2026-10-02')
+        self.assertIn(picked['id'], self.ids(mock_immich.FAVOURITES))
+
+    def test_albums_use_the_newest_cover(self):
+        self.assertEqual(tiles.pick(self.client, 'albums', '2026-10-02')['id'], mock_immich.ASSETS[0]['id'])
+
+    def test_tiles_show_different_photos(self):
+        memories = [a['id'] for _, assets in self.client.memories(date.today()) for a in assets]
+        days = tiles.pick(self.client, 'memories', '2026-10-02')['id']
+        root = tiles.pick(self.client, tiles.ROOT, '2026-10-02', {days})['id']
+        self.assertIn(root, memories)
+        self.assertNotEqual(root, days)
+        only = {a['id'] for a in mock_immich.ASSETS}           # nothing new left: share rather than show nothing
+        self.assertIn(tiles.pick(self.client, 'memories', '2026-10-02', only)['id'], memories)
+
+    def test_timeline_shows_the_newest_day(self):
+        self.assertEqual(tiles.pick(self.client, 'timeline', '2026-10-02')['id'], mock_immich.ASSETS[0]['id'])
+
+    def test_same_photo_all_day(self):
+        days = [tiles.pick(self.client, 'memories', day)['id'] for day in ('2026-10-02', '2026-10-02')]
+        self.assertEqual(days[0], days[1])
+
+    def test_offline_gives_no_photo(self):
+        self.assertIsNone(tiles.pick(api.ImmichClient(BROKEN, 'k', timeout=0.5), tiles.ROOT, '2026-10-02'))
+
+    def test_without_pil_the_photo_is_used(self):
+        dest = os.path.join(kodi.ensure_dir(tiles.tile_dir()), 'x.jpg')
+        with mock.patch.dict(sys.modules, {'PIL': None}):
+            tiles.render(b'photo', 'Immich', dest)
+        with open(dest, 'rb') as f:
+            self.assertEqual(f.read(), b'photo')
+        self.assertFalse(os.path.exists(dest + '.tmp'))
+
+    @unittest.skipUnless(PIL, 'needs PIL')
+    def test_tile_is_square_dark_and_labelled(self):
+        from PIL import Image
+        dest = os.path.join(kodi.ensure_dir(tiles.tile_dir()), 'x.jpg')
+        photo = self.client.image(mock_immich.ASSETS[0]['id'])
+        with mock.patch.object(tiles, 'font_file', lambda: (None, False)):
+            tiles.render(photo, 'Immich', dest)
+        im = Image.open(dest).convert('L')
+        self.assertEqual(im.size, (tiles.SIZE, tiles.SIZE))
+        centre = im.crop((128, 216, 384, 296)).getextrema()
+        self.assertEqual(centre[1], 255)                    # white text in the middle
+        self.assertLess(im.crop((0, 0, 64, 64)).getextrema()[1], 160)   # darkened photo at the corner
+
+    @unittest.skipUnless(PIL, 'needs PIL')
+    def test_one_text_size_fits_the_longest_name(self):
+        from PIL import Image, ImageDraw
+        with mock.patch.object(tiles, 'font_file', lambda: (None, False)):
+            size = tiles.text_size(['Places', 'On this day and more'])
+            face, stroke = tiles.font(size)
+        draw = ImageDraw.Draw(Image.new('L', (1, 1)))
+        self.assertLessEqual(draw.textbbox((0, 0), 'On this day and more', font=face, stroke_width=stroke)[2],
+                             tiles.SIZE * 0.8)
+        self.assertLess(size, tiles.text_size(['Places']))
+
+    def test_skin_bold_font_first(self):
+        skin = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, skin)
+        os.makedirs(os.path.join(skin, 'xml'))
+        os.makedirs(os.path.join(skin, 'fonts'))
+        with open(os.path.join(skin, 'xml', 'Font.xml'), 'w') as f:
+            f.write('<fonts><fontset id="Default"><font><name>font13</name><filename>Sans-Regular.ttf</filename></font>'
+                    '<font><name>font_bold</name><filename>Sans-Bold.ttf</filename></font></fontset></fonts>')
+        for name in ('Sans-Regular.ttf', 'Sans-Bold.ttf'):
+            open(os.path.join(skin, 'fonts', name), 'w').close()
+        where = lambda p: p.replace('special://skin', skin)
+        with mock.patch.object(tiles.xbmcvfs, 'translatePath', where):
+            self.assertEqual(tiles.font_file(), (os.path.join(skin, 'fonts', 'Sans-Bold.ttf'), True))
+            os.remove(os.path.join(skin, 'fonts', 'Sans-Bold.ttf'))
+            self.assertEqual(tiles.font_file(), (os.path.join(skin, 'fonts', 'Sans-Regular.ttf'), False))
+
+    def test_refresh_draws_each_tile_once_a_day(self):
+        calls = []
+        def rpc(method, **params):
+            calls.append(method)
+            return {'textures': [{'textureid': 7}]} if method == 'Textures.GetTextures' else {}
+        with mock.patch.object(tiles, 'render', lambda data, label, dest, size: open(dest, 'wb').close()), \
+                mock.patch.object(kodi, 'jsonrpc', rpc):
+            self.assertTrue(tiles.due())
+            self.assertEqual(tiles.refresh(self.client, xbmc.Monitor()), len(tiles.FOLDERS) + 1)
+            self.assertFalse(tiles.due())
+        for key in [tiles.ROOT] + list(tiles.FOLDERS):
+            self.assertEqual(len(tiles.drawn(key)), 1, key)
+        self.assertEqual(calls, ['Textures.GetTextures', 'Textures.RemoveTexture'])
+
+    def test_off_draws_nothing(self):
+        with mock.patch.dict(xbmcaddon.SETTINGS, {'tiles': 'false'}):
+            self.assertFalse(tiles.due())
+
+    def draw(self, *names):
+        kodi.ensure_dir(tiles.tile_dir())
+        for name in names:
+            open(os.path.join(tiles.tile_dir(), name), 'w').close()
+        return [os.path.join(tiles.tile_dir(), n) for n in names]
+
+    def test_newest_drawing_wins(self):
+        old, new = self.draw('timeline-100.jpg', 'timeline-200.jpg')
+        self.assertEqual(tiles.current('timeline'), new)
+        self.assertIsNone(tiles.current('places'))
+
+    def test_old_drawings_go_unless_a_favourite_shows_them(self):
+        kept, gone, newest, newest2 = self.draw('immich-100.jpg', 'memories-100.jpg', 'immich-200.jpg', 'memories-200.jpg')
+        fav = os.path.join(tiles.tile_dir(), 'favourites.xml')
+        with open(fav, 'w') as f:
+            f.write('<favourites><favourite name="Immich" thumb="{}">RunAddon(&quot;plugin.image.immich&quot;)'
+                    '</favourite></favourites>'.format(kept))
+        with mock.patch.object(tiles, 'favourites_file', lambda: fav), mock.patch.object(kodi, 'jsonrpc', lambda *a, **k: {}):
+            tiles.tidy()
+        self.assertEqual([os.path.exists(p) for p in (kept, gone, newest, newest2)], [True, False, True, True])
+
+    def test_menu_shows_tiles(self):
+        tile, = self.draw('timeline-100.jpg')
+        del xbmcplugin.ITEMS[:]
+        with mock.patch.object(signin, 'is_signed_in', lambda: True), mock.patch.object(signin, 'check', lambda: True):
+            plugin.root()
+        art = {url.split('action=')[-1]: li.art.get('thumb') for url, li, _ in xbmcplugin.ITEMS}
+        self.assertEqual(art['timeline'], tile)
+        self.assertEqual(art['places'], kodi.ICON)          # no tile drawn yet
+        with mock.patch.dict(xbmcaddon.SETTINGS, {'tiles': 'false'}):
+            self.assertEqual(tiles.art('timeline'), kodi.ICON)
+
+    def test_favourites_point_at_tiles(self):
+        root, days = self.draw('immich-100.jpg', 'memories-100.jpg')
+        fav = os.path.join(tiles.tile_dir(), 'favourites.xml')
+        rows = [('Immich', kodi.ICON, 'RunAddon(&quot;plugin.image.immich&quot;)'),
+                ('Days', kodi.ICON, 'ActivateWindow(Pictures,&quot;plugin://plugin.image.immich/?action=memories&quot;,return)'),
+                ('Mine', '/my/own.png', 'RunAddon(&quot;plugin.image.immich&quot;)'),
+                ('RomM', '/romm.png', 'RunAddon(&quot;plugin.program.romm&quot;)')]
+        with open(fav, 'w') as f:
+            f.write('<favourites>\n' + ''.join('    <favourite name="{}" thumb="{}">{}</favourite>\n'.format(*r)
+                                                for r in rows) + '</favourites>\n')
+        thumbs = lambda: [e.get('thumb') for e in ET.parse(fav).getroot()]
+        with mock.patch.object(tiles.xbmcvfs, 'translatePath', lambda p: fav if 'favourites' in p else p):
+            tiles.point_favourites()
+            self.assertEqual(thumbs(), [root, days, '/my/own.png', '/romm.png'])
+            newer, = self.draw('immich-200.jpg')
+            tiles.point_favourites()
+            self.assertEqual(thumbs()[0], newer)                    # follows the newest drawing
+            with mock.patch.dict(xbmcaddon.SETTINGS, {'tiles': 'false'}):
+                tiles.point_favourites()
+            self.assertEqual(thumbs(), [kodi.ICON, kodi.ICON, '/my/own.png', '/romm.png'])
 
 
 class Loading(NoProxy):

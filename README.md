@@ -56,6 +56,9 @@ shimmering while photos zoom; it needs a Kodi build with mipmapped textures
   Favourites.
 - Skins with custom widgets: use `plugin://plugin.image.immich/?action=today`
   for a row of today's memories.
+- The menu and Immich favourites show one of your photos with the folder's
+  name over it, a new one each day. Favourites pick it up the next time Kodi
+  starts. Turn it off with *Photo tiles* in the add-on's Browsing settings.
 
 ---
 

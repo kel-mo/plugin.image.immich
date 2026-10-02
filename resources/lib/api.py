@@ -97,14 +97,14 @@ class ImmichClient:
             h.update(extra)
         return h
 
-    def request(self, method, path, params=None, body=None, timeout=None):
+    def request(self, method, path, params=None, body=None, timeout=None, raw=False):
         if not self.base_url:
             raise ApiError(kodi.L(30601))
         if aborting():
             raise ApiError('cancelled')
         url = self.url(path, **(params or {}))
         data = None
-        extra = {}
+        extra = {'Accept': '*/*'} if raw else {}
         if body is not None:
             data = json.dumps(body).encode('utf-8')
             extra['Content-Type'] = 'application/json'
@@ -126,6 +126,8 @@ class ImmichClient:
             raise ApiError('HTTP {} for {}: {}'.format(e.code, path, detail or e.reason), e.code, detail)
         except (URLError, socket.timeout, OSError, HTTPException) as e:
             raise ApiError('{}: {}'.format(kodi.L(30614), e))
+        if raw:
+            return payload
         if not payload:
             return None
         try:
@@ -208,8 +210,8 @@ class ImmichClient:
             page += 1
         return out
 
-    def random(self, size=250):
-        body = {'size': size, 'withExif': True, 'visibility': 'timeline'}   # skips live-photo clips, archive
+    def random(self, size=250, **filters):
+        body = dict(filters, size=size, withExif=True, visibility='timeline')   # skips live-photo clips, archive
         return [from_asset(a) for a in self.post('/search/random', body) or []]
 
     # ------------------------------------------------------------------ media
@@ -221,6 +223,11 @@ class ImmichClient:
         # fullsize only falls back to the original when edits are not requested
         return self.media_url('/assets/{}/thumbnail'.format(asset_id), size=size,
                               edited=None if size == 'fullsize' else 'true')
+
+    def image(self, asset_id, size='preview'):
+        """A thumbnail's bytes, straight from the server rather than through the proxy."""
+        return self.request('GET', '/assets/{}/thumbnail'.format(quote(asset_id)), params={'size': size, 'edited': 'true'},
+                            raw=True)
 
     def person_thumb_url(self, person_id):
         return self.media_url('/people/{}/thumbnail'.format(person_id))
