@@ -753,12 +753,13 @@ class Tiles(NoProxy):
         self.assertEqual([os.path.exists(p) for p in (kept, gone, newest, newest2)], [True, False, True, True])
 
     def test_menu_shows_tiles(self):
-        tile, = self.draw('timeline-100.jpg')
+        tile, shuffle = self.draw('timeline-100.jpg', 'shuffle-100.jpg')
         del xbmcplugin.ITEMS[:]
         with mock.patch.object(signin, 'is_signed_in', lambda: True), mock.patch.object(signin, 'check', lambda: True):
             plugin.root()
         art = {url.split('action=')[-1]: li.art.get('thumb') for url, li, _ in xbmcplugin.ITEMS}
         self.assertEqual(art['timeline'], tile)
+        self.assertEqual(art['play'], shuffle)              # Shuffle everything
         self.assertEqual(art['places'], kodi.ICON)          # no tile drawn yet
         with mock.patch.dict(xbmcaddon.SETTINGS, {'tiles': 'false'}):
             self.assertEqual(tiles.art('timeline'), kodi.ICON)
