@@ -20,7 +20,7 @@ SIZE = 512                               # square, as Estuary shows favourites
 DIM = 0.5                                # photo brightness behind the name
 ROOT = 'immich'                          # the add-on's own tile
 FOLDERS = {'timeline': 30000, 'memories': 30017, 'people': 30012, 'places': 30014,
-           'favourites': 30021, 'albums': 30001, 'search_menu': 30022}
+           'favourites': 30021, 'albums': 30001, 'search_menu': 30022, 'shuffle': 30026}   # shuffle: Shuffle everything
 FONT_DIRS = ('special://skin/fonts', 'special://home/media/Fonts', 'special://xbmc/media/Fonts')
 
 
@@ -87,7 +87,8 @@ def places(client):
 
 SOURCES = {ROOT: (memories, favourites, anything), 'memories': (memories, anything),
            'favourites': (favourites, anything), 'albums': (album, anything), 'people': (person, anything),
-           'places': (places, anything), 'timeline': (latest, anything), 'search_menu': (anything,)}
+           'places': (places, anything), 'timeline': (latest, anything), 'search_menu': (anything,),
+           'shuffle': (anything,)}
 
 
 def pick(client, key, day, skip=()):

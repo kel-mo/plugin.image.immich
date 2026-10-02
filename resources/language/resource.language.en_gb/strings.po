@@ -114,6 +114,10 @@ msgctxt "#30025"
 msgid "Gallery"
 msgstr ""
 
+msgctxt "#30026"
+msgid "Shuffle"
+msgstr ""
+
 # Settings 30100-30599
 
 msgctxt "#30100"

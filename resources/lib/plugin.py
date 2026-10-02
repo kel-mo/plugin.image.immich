@@ -53,9 +53,9 @@ def count(n, one=30009, many=30010):
     return kodi.L(one) if n == 1 else kodi.L(many, n)
 
 
-def action_item(label, action, **params):
+def action_item(label, action, icon=None, **params):
     li = xbmcgui.ListItem(label, offscreen=True)
-    li.setArt({'icon': kodi.ICON, 'thumb': kodi.ICON})
+    li.setArt({'icon': icon or kodi.ICON, 'thumb': icon or kodi.ICON})
     xbmcplugin.addDirectoryItem(HANDLE, url_for(action, **params), li, isFolder=False)
 
 
@@ -80,7 +80,7 @@ def root():
     if probe(lambda: any(a.get('assetCount') for a in client.albums()), True, True):
         folder(kodi.L(30001), 'albums', tiles.art('albums'))
     folder(kodi.L(30022), 'search_menu', tiles.art('search_menu'))
-    action_item(kodi.L(30006), 'play', source='random', shuffle='1')
+    action_item(kodi.L(30006), 'play', tiles.art('shuffle'), source='random', shuffle='1')
     action_item(kodi.L(30003), 'settings')
     end()
 
