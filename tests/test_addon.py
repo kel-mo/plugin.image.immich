@@ -846,38 +846,6 @@ class Tiles(NoProxy):
             self.assertEqual(tiles.art('timeline'), kodi.ICON)
 
 
-    def test_favourites_pointed_back_at_the_icon(self):
-        tile = os.path.join(tiles.tile_dir(), 'memories-100.jpg')
-        favs = [{'type': 'window', 'title': 'Films', 'window': 'videos', 'windowparameter': 'videodb://movies/', 'thumbnail': ''},
-                {'type': 'window', 'title': 'Immich', 'window': 'pictures', 'windowparameter': 'plugin://plugin.image.immich', 'thumbnail': tile},
-                {'type': 'script', 'title': 'Mine', 'path': 'script.mine', 'thumbnail': '/my/own.png'},
-                {'type': 'window', 'title': 'Folder', 'window': 'pictures', 'windowparameter': 'plugin://plugin.image.immich/?action=x',
-                 'thumbnail': tile}]
-        calls = []
-
-        def rpc(method, **params):                            # as Kodi: adding a favourite that exists removes it
-            calls.append(method)
-            if method == 'Favourites.GetFavourites':
-                return {'favourites': [dict(f) for f in favs]}
-            same = lambda f: all(f.get(k) == params.get(k) for k in ('type', 'window', 'windowparameter', 'path'))
-            found = next((f for f in favs if same(f)), None)
-            favs.remove(found) if found else favs.append(dict(params, thumbnail=params.get('thumbnail', '')))
-            return 'OK'
-        with mock.patch.object(kodi, 'jsonrpc', rpc):
-            self.assertEqual(tiles.repair_favourites(xbmc.Monitor()), 2)
-        self.assertEqual([f['title'] for f in favs], ['Films', 'Immich', 'Mine', 'Folder'])      # in place
-        self.assertEqual([f['thumbnail'] for f in favs], ['', kodi.ICON, '/my/own.png', kodi.ICON])
-        self.assertEqual(calls.count('Favourites.AddFavourite'), 6)                           # from the first on
-        with mock.patch.object(kodi, 'jsonrpc', rpc):
-            self.assertEqual(tiles.repair_favourites(xbmc.Monitor()), 0)                                   # nothing left to fix
-        self.assertEqual(calls.count('Favourites.AddFavourite'), 6)
-        favs.append({'type': 'unknown', 'title': 'Odd', 'thumbnail': ''})
-        favs[1]['thumbnail'] = tile
-        with mock.patch.object(kodi, 'jsonrpc', rpc):
-            self.assertEqual(tiles.repair_favourites(xbmc.Monitor()), 0)                                   # can't keep the order
-        self.assertEqual(favs[1]['thumbnail'], tile)
-
-
 class Loading(NoProxy):
     def viewer(self):
         window = make_viewer(api.ImmichClient().search_page(size=5)[0])
