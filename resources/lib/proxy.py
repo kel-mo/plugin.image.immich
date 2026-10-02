@@ -15,7 +15,7 @@ from urllib.request import Request, urlopen
 import xbmc
 import xbmcgui
 
-from . import kodi
+from . import api, kodi
 
 PORT = 52283                             # fixed so Kodi's texture cache keeps its addresses
 TRIES = 10
@@ -23,7 +23,7 @@ PROPERTY = '{}.proxy'.format(kodi.ADDON_ID)   # Home window property holding the
 DONE = '{}.done'.format(kodi.ADDON_ID)       # Home window property: photos fully sent, as id:size@time
 DONE_KEEP = 8
 PHOTO = re.compile(r'/api/assets/([0-9a-f-]+)/thumbnail$')
-TIMEOUT = 30
+TIMEOUT = 4                              # per socket wait: a relay under way ends inside Kodi's five-second wait at exit
 CHUNK = 64 * 1024
 _done_lock = threading.Lock()
 ALLOWED = re.compile(r'/api/(assets/[0-9a-f-]+/(thumbnail|original|video/playback)|people/[0-9a-f-]+/thumbnail)$')
@@ -87,7 +87,7 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     while True:
                         data = resp.read(CHUNK)
-                        if not data:
+                        if not data or api.aborting():
                             break
                         self.wfile.write(data)
                 except (IncompleteRead, OSError):
