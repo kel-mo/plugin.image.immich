@@ -43,5 +43,4 @@ def run():
                     kodi.log('tiles failed: {}'.format(traceback.format_exc()), xbmc.LOGWARNING)
                     wait = TILE_RETRY
     finally:
-        tiles.point_favourites()
         proxy.stop(server)

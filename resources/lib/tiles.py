@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Menu and favourites tiles: a darkened photo with "Gallery" or a folder's name over it, drawn daily."""
-import html
+"""Menu tiles: a darkened photo with the folder's name over it, drawn daily."""
 import io
 import os
 import random
@@ -9,17 +8,15 @@ import time
 import xml.etree.ElementTree as ET
 from datetime import date
 from urllib.parse import quote
-from xml.sax.saxutils import escape
 
 import xbmcvfs
 
 from . import kodi
 from .api import ApiError, from_asset
 
-SIZE = 512                               # square, as Estuary shows favourites
+SIZE = 512                               # square, as Estuary shows folders
 DIM = 0.5                                # photo brightness behind the name
 SHADOW = 200                             # darkness of the halo round the name, of 255
-ROOT = 'immich'                          # the add-on's own tile
 FOLDERS = {'timeline': 30000, 'memories': 30017, 'people': 30012, 'places': 30014,
            'favourites': 30021, 'albums': 30001, 'search_menu': 30022, 'shuffle': 30026}   # shuffle: Shuffle everything
 FONT_DIRS = ('special://skin/fonts', 'special://home/media/Fonts', 'special://xbmc/media/Fonts')
@@ -86,10 +83,8 @@ def places(client):
     return [from_asset(a) for a in client.cities()]
 
 
-SOURCES = {ROOT: (memories, favourites, anything), 'memories': (memories, anything),
-           'favourites': (favourites, anything), 'albums': (album, anything), 'people': (person, anything),
-           'places': (places, anything), 'timeline': (latest, anything), 'search_menu': (anything,),
-           'shuffle': (anything,)}
+SOURCES = {'memories': (memories, anything), 'favourites': (favourites, anything), 'albums': (album, anything),
+           'people': (person, anything), 'places': (places, anything), 'timeline': (latest, anything)}   # the rest: anything
 
 
 def pick(client, key, day, skip=()):
@@ -97,7 +92,7 @@ def pick(client, key, day, skip=()):
     the same one all day where it can."""
     rnd = random.Random('{}:{}'.format(day, key))
     spare = None
-    for source in SOURCES[key]:
+    for source in SOURCES.get(key, (anything,)):
         try:
             found = sorted((a for a in source(client) if a.get('image')), key=lambda a: a['id'])
         except ApiError as e:
@@ -226,8 +221,7 @@ def refresh(client, monitor):
     day = date.today().isoformat()
     name = int(time.time())
     done, used = 0, set()
-    # folders first, so On this day keeps a memory; the add-on's own tile takes what is left
-    labels = [(k, kodi.L(i)) for k, i in FOLDERS.items()] + [(ROOT, kodi.L(30025))]   # favourites name the add-on beside it
+    labels = [(k, kodi.L(i)) for k, i in FOLDERS.items()]
     if not all(label for _, label in labels):           # Kodi has this version's strings only after a restart
         kodi.debug('tiles: names not loaded yet')
         return 0
@@ -248,17 +242,16 @@ def refresh(client, monitor):
         with open(stamp(), 'w') as f:
             f.write(drawing(day))                         # the day it started, should it run past midnight
         tidy()
-    kodi.log('tiles: drew {} of {}'.format(done, len(FOLDERS) + 1))
+    kodi.log('tiles: drew {} of {}'.format(done, len(FOLDERS)))
     return done
 
 
 def tidy():
-    """Delete drawings no longer shown: all but the newest, unless a favourite still points at it."""
-    keep = set(favourite_thumbs())
-    for key in [ROOT] + list(FOLDERS):
-        for old in drawn(key)[:-1]:
-            if old not in keep:
-                os.remove(old)
+    """Delete drawings no longer shown: all but each folder's newest, and those of tiles since dropped."""
+    keep = {current(key) for key in FOLDERS} | {stamp()}
+    for name in os.listdir(tile_dir()):
+        if os.path.join(tile_dir(), name) not in keep:
+            os.remove(os.path.join(tile_dir(), name))
     forget()
 
 
@@ -270,52 +263,3 @@ def forget():
     for t in (found or {}).get('textures') or []:
         kodi.jsonrpc('Textures.RemoveTexture', textureid=t['textureid'])
 
-
-# ---------------------------------------------------------------- favourites
-def target(command):
-    """The tile for a favourite opening this add-on, at its root or a top-level folder; None for others."""
-    command = html.unescape(command)
-    if re.search(r'RunAddon\(\s*"?{}"?\s*\)'.format(re.escape(kodi.ADDON_ID)), command):
-        return ROOT
-    found = re.search(r'plugin://{}/?(?:\?action=(\w+))?["),]'.format(re.escape(kodi.ADDON_ID)), command)
-    if not found:
-        return None
-    return found.group(1) if found.group(1) in FOLDERS else None if found.group(1) else ROOT
-
-
-def favourites_file():
-    return xbmcvfs.translatePath('special://profile/favourites.xml')
-
-
-def favourite_thumbs():
-    try:
-        with open(favourites_file(), encoding='utf-8') as f:
-            return [html.unescape(t) for t in re.findall(r'<favourite\b[^>]*\bthumb="([^"]*)"', f.read())]
-    except OSError:
-        return []
-
-
-def point_favourites():
-    """Kodi reads favourites.xml only at start: on the way out, point ours at their tiles, or back at the icon."""
-    fav = favourites_file()
-    try:
-        with open(fav, encoding='utf-8') as f:
-            text = f.read()
-    except OSError:
-        return
-    on = kodi.fresh_setting('tiles') == 'true'
-
-    def thumb(m):
-        key = target(m.group(2))
-        found = re.search(r'thumb="([^"]*)"', m.group(1))
-        if key is None or not found or html.unescape(found.group(1)) not in [kodi.ICON] + drawn(key):
-            return m.group(0)                       # not ours, or a picture someone chose
-        want = current(key) if on and current(key) else kodi.ICON
-        return m.group(0).replace(found.group(0), 'thumb="{}"'.format(escape(want, {'"': '&quot;'})), 1)
-
-    new = re.sub(r'(<favourite\b[^>]*>)(.*?)</favourite>', thumb, text, flags=re.S)
-    if new != text:
-        with open(fav + '.tmp', 'w', encoding='utf-8') as f:
-            f.write(new)
-        os.replace(fav + '.tmp', fav)
-        kodi.log('tiles: pointed favourites at {}'.format('tiles' if on else 'the icon'))

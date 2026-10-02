@@ -110,10 +110,6 @@ msgctxt "#30024"
 msgid "Describe what you are looking for"
 msgstr ""
 
-msgctxt "#30025"
-msgid "Gallery"
-msgstr ""
-
 msgctxt "#30026"
 msgid "Shuffle"
 msgstr ""
@@ -245,7 +241,7 @@ msgid "Photo tiles"
 msgstr ""
 
 msgctxt "#30304"
-msgid "Shows one of your photos, with the folder's name over it, on Immich's menu and on Immich favourites. A new photo each day. Favourites change the next time Kodi starts."
+msgid "Shows one of your photos, with the folder's name over it, on Immich's menu. A new photo each day."
 msgstr ""
 
 msgctxt "#30400"

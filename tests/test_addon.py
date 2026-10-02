@@ -7,7 +7,6 @@ import tempfile
 import threading
 import time
 import unittest
-import xml.etree.ElementTree as ET
 from datetime import date
 from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -634,14 +633,14 @@ class Tiles(NoProxy):
     def ids(self, assets):
         return {a['id'] for a in assets}
 
-    def test_root_prefers_on_this_day(self):
+    def test_on_this_day_prefers_a_memory(self):
         memories = self.ids(a for _, assets in self.client.memories(date.today()) for a in assets)
-        self.assertIn(tiles.pick(self.client, tiles.ROOT, '2026-10-02')['id'], memories)
+        self.assertIn(tiles.pick(self.client, 'memories', '2026-10-02')['id'], memories)
 
-    def test_root_falls_back_to_favourites(self):
+    def test_on_this_day_falls_back_to_any_photo(self):
         with mock.patch.object(self.client, 'memories', lambda day: []):
-            picked = tiles.pick(self.client, tiles.ROOT, '2026-10-02')
-        self.assertIn(picked['id'], self.ids(mock_immich.FAVOURITES))
+            picked = tiles.pick(self.client, 'memories', '2026-10-02')
+        self.assertIn(picked['id'], self.ids(mock_immich.ASSETS))
 
     def test_albums_use_the_newest_cover(self):
         self.assertEqual(tiles.pick(self.client, 'albums', '2026-10-02')['id'], mock_immich.ASSETS[0]['id'])
@@ -649,9 +648,9 @@ class Tiles(NoProxy):
     def test_tiles_show_different_photos(self):
         memories = [a['id'] for _, assets in self.client.memories(date.today()) for a in assets]
         days = tiles.pick(self.client, 'memories', '2026-10-02')['id']
-        root = tiles.pick(self.client, tiles.ROOT, '2026-10-02', {days})['id']
-        self.assertIn(root, memories)
-        self.assertNotEqual(root, days)
+        other = tiles.pick(self.client, 'memories', '2026-10-02', {days})['id']
+        self.assertIn(other, memories)
+        self.assertNotEqual(other, days)
         only = {a['id'] for a in mock_immich.ASSETS}           # nothing new left: share rather than show nothing
         self.assertIn(tiles.pick(self.client, 'memories', '2026-10-02', only)['id'], memories)
 
@@ -663,7 +662,7 @@ class Tiles(NoProxy):
         self.assertEqual(days[0], days[1])
 
     def test_offline_gives_no_photo(self):
-        self.assertIsNone(tiles.pick(api.ImmichClient(BROKEN, 'k', timeout=0.5), tiles.ROOT, '2026-10-02'))
+        self.assertIsNone(tiles.pick(api.ImmichClient(BROKEN, 'k', timeout=0.5), 'memories', '2026-10-02'))
 
     def test_without_pil_the_photo_is_used(self):
         dest = os.path.join(kodi.ensure_dir(tiles.tile_dir()), 'x.jpg')
@@ -764,9 +763,9 @@ class Tiles(NoProxy):
         with mock.patch.object(tiles, 'render', lambda data, label, dest, size: open(dest, 'wb').close()), \
                 mock.patch.object(kodi, 'jsonrpc', rpc):
             self.assertTrue(tiles.due())
-            self.assertEqual(tiles.refresh(self.client, xbmc.Monitor()), len(tiles.FOLDERS) + 1)
+            self.assertEqual(tiles.refresh(self.client, xbmc.Monitor()), len(tiles.FOLDERS))
             self.assertFalse(tiles.due())
-        for key in [tiles.ROOT] + list(tiles.FOLDERS):
+        for key in tiles.FOLDERS:
             self.assertEqual(len(tiles.drawn(key)), 1, key)
         self.assertEqual(calls, ['Textures.GetTextures', 'Textures.RemoveTexture'])
 
@@ -788,7 +787,7 @@ class Tiles(NoProxy):
             f.write(date.today().isoformat())                # as 0.3.1 and 0.3.2 wrote it
         self.assertTrue(tiles.due())
 
-    def test_service_draws_with_a_short_timeout_and_points_favourites_on_exit(self):
+    def test_service_draws_with_a_short_timeout_and_stops_the_proxy_on_exit(self):
         seen, order = [], []
         class Monitor:                                      # one check, then Kodi exits
             waits = iter([False, True])
@@ -799,11 +798,10 @@ class Tiles(NoProxy):
                 mock.patch.object(proxy, 'forget_keyed_textures', lambda: None), \
                 mock.patch.object(proxy, 'forget_cached_photos', lambda: None), \
                 mock.patch.object(service, 'Monitor', Monitor), mock.patch.object(tiles, 'due', lambda: True), \
-                mock.patch.object(tiles, 'refresh', lambda client, monitor: seen.append(client.timeout) or 1), \
-                mock.patch.object(tiles, 'point_favourites', lambda: order.append('favourites')):
+                mock.patch.object(tiles, 'refresh', lambda client, monitor: seen.append(client.timeout) or 1):
             service.run()
         self.assertEqual(seen, [service.TILE_TIMEOUT])
-        self.assertEqual(order, ['favourites', 'stop'])
+        self.assertEqual(order, ['stop'])
 
     def test_off_draws_nothing(self):
         with mock.patch.dict(xbmcaddon.SETTINGS, {'tiles': 'false'}):
@@ -820,15 +818,11 @@ class Tiles(NoProxy):
         self.assertEqual(tiles.current('timeline'), new)
         self.assertIsNone(tiles.current('places'))
 
-    def test_old_drawings_go_unless_a_favourite_shows_them(self):
-        kept, gone, newest, newest2 = self.draw('immich-100.jpg', 'memories-100.jpg', 'immich-200.jpg', 'memories-200.jpg')
-        fav = os.path.join(tiles.tile_dir(), 'favourites.xml')
-        with open(fav, 'w') as f:
-            f.write('<favourites><favourite name="Immich" thumb="{}">RunAddon(&quot;plugin.image.immich&quot;)'
-                    '</favourite></favourites>'.format(kept))
-        with mock.patch.object(tiles, 'favourites_file', lambda: fav), mock.patch.object(kodi, 'jsonrpc', lambda *a, **k: {}):
+    def test_old_drawings_go(self):
+        gone, newest, other, stray = self.draw('memories-100.jpg', 'memories-200.jpg', 'timeline-100.jpg', 'immich-100.jpg')
+        with mock.patch.object(kodi, 'jsonrpc', lambda *a, **k: {}):
             tiles.tidy()
-        self.assertEqual([os.path.exists(p) for p in (kept, gone, newest, newest2)], [True, False, True, True])
+        self.assertEqual([os.path.exists(p) for p in (gone, newest, other, stray)], [False, True, True, False])
 
     def test_menu_shows_tiles(self):
         tile, shuffle = self.draw('timeline-100.jpg', 'shuffle-100.jpg')
@@ -841,27 +835,6 @@ class Tiles(NoProxy):
         self.assertEqual(art['places'], kodi.ICON)          # no tile drawn yet
         with mock.patch.dict(xbmcaddon.SETTINGS, {'tiles': 'false'}):
             self.assertEqual(tiles.art('timeline'), kodi.ICON)
-
-    def test_favourites_point_at_tiles(self):
-        root, days = self.draw('immich-100.jpg', 'memories-100.jpg')
-        fav = os.path.join(tiles.tile_dir(), 'favourites.xml')
-        rows = [('Immich', kodi.ICON, 'RunAddon(&quot;plugin.image.immich&quot;)'),
-                ('Days', kodi.ICON, 'ActivateWindow(Pictures,&quot;plugin://plugin.image.immich/?action=memories&quot;,return)'),
-                ('Mine', '/my/own.png', 'RunAddon(&quot;plugin.image.immich&quot;)'),
-                ('RomM', '/romm.png', 'RunAddon(&quot;plugin.program.romm&quot;)')]
-        with open(fav, 'w') as f:
-            f.write('<favourites>\n' + ''.join('    <favourite name="{}" thumb="{}">{}</favourite>\n'.format(*r)
-                                                for r in rows) + '</favourites>\n')
-        thumbs = lambda: [e.get('thumb') for e in ET.parse(fav).getroot()]
-        with mock.patch.object(tiles.xbmcvfs, 'translatePath', lambda p: fav if 'favourites' in p else p):
-            tiles.point_favourites()
-            self.assertEqual(thumbs(), [root, days, '/my/own.png', '/romm.png'])
-            newer, = self.draw('immich-200.jpg')
-            tiles.point_favourites()
-            self.assertEqual(thumbs()[0], newer)                    # follows the newest drawing
-            with mock.patch.dict(xbmcaddon.SETTINGS, {'tiles': 'false'}):
-                tiles.point_favourites()
-            self.assertEqual(thumbs(), [kodi.ICON, kodi.ICON, '/my/own.png', '/romm.png'])
 
 
 class Loading(NoProxy):
