@@ -10,7 +10,7 @@ import xbmc
 import xbmcgui
 import xbmcplugin
 
-from . import items, kodi, signin, viewer
+from . import items, kodi, signin, tiles, viewer
 from .api import ApiError, AuthError, ImmichClient
 
 BASE = 'plugin://{}/'.format(kodi.ADDON_ID)
@@ -65,21 +65,21 @@ def root():
         action_item(kodi.L(30002), 'signin')
         action_item(kodi.L(30003), 'settings')
         return end()
-    folder(kodi.L(30000), 'timeline', kodi.ICON)
+    folder(kodi.L(30000), 'timeline', tiles.art('timeline'))
     client = ImmichClient(timeout=PROBE_TIMEOUT)
     probe = Probe()
     memories = probe(lambda: client.memories(date.today()), [], [])
     if memories:
-        folder(kodi.L(30017), 'memories', kodi.ICON, label2=count(sum(len(m[1]) for m in memories)),
+        folder(kodi.L(30017), 'memories', tiles.art('memories'), label2=count(sum(len(m[1]) for m in memories)),
                context=slideshow_menu(source='memories'))
     if probe(lambda: client.has_people(), False, True):
-        folder(kodi.L(30012), 'people', kodi.ICON)
-    folder(kodi.L(30014), 'places', kodi.ICON)
+        folder(kodi.L(30012), 'people', tiles.art('people'))
+    folder(kodi.L(30014), 'places', tiles.art('places'))
     if probe(lambda: bool(client.search_page(1, 1, isFavorite=True, visibility=TIMELINE)[0]), True, True):
-        folder(kodi.L(30021), 'favourites', kodi.ICON, context=slideshow_menu(source='favourites'))
+        folder(kodi.L(30021), 'favourites', tiles.art('favourites'), context=slideshow_menu(source='favourites'))
     if probe(lambda: any(a.get('assetCount') for a in client.albums()), True, True):
-        folder(kodi.L(30001), 'albums', kodi.ICON)
-    folder(kodi.L(30022), 'search_menu', kodi.ICON)
+        folder(kodi.L(30001), 'albums', tiles.art('albums'))
+    folder(kodi.L(30022), 'search_menu', tiles.art('search_menu'))
     action_item(kodi.L(30006), 'play', source='random', shuffle='1')
     action_item(kodi.L(30003), 'settings')
     end()
