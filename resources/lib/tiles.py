@@ -142,8 +142,17 @@ def font(size):
     return (ImageFont.truetype(file, size) if file else ImageFont.load_default(size)), (0 if bold else max(1, size // 24))
 
 
+def lines(draw, label, face, stroke):
+    """The label as it fits 80 % of the width: one line, else two split where the longer is shortest; None if not."""
+    width = lambda text: max(draw.textbbox((0, 0), t, font=face, stroke_width=stroke)[2] for t in text.split('\n'))
+    words = label.split()
+    tries = [label] + [' '.join(words[:i]) + '\n' + ' '.join(words[i:]) for i in range(1, len(words))]
+    best = min(tries, key=lambda text: (width(text) > SIZE * 0.8, text.count('\n'), width(text)))
+    return best if width(best) <= SIZE * 0.8 else None
+
+
 def text_size(labels):
-    """One size for every tile, so the names match: the largest at which the longest fits 80 % of the width."""
+    """One size for every tile, so the names match: the largest at which each fits, wrapped onto two lines if need be."""
     try:
         from PIL import Image, ImageDraw
     except ImportError:
@@ -152,18 +161,26 @@ def text_size(labels):
     size = SIZE // 5
     while size > 12:
         face, stroke = font(size)
-        widest = max(draw.textbbox((0, 0), label, font=face, stroke_width=stroke)[2] for label in labels)
-        if widest <= SIZE * 0.8:
+        if all(lines(draw, label, face, stroke) for label in labels):
             break
         size = int(size * 0.9)
     return size
+
+
+def halo(xy, text, face, stroke, size):
+    """A soft dark halo, so bright pictures stay readable: the text as drawn, widened, then blurred.
+    Widened afterwards, as a thicker stroke would space wrapped lines further apart than the text's."""
+    from PIL import Image, ImageDraw, ImageFilter
+    mask = Image.new('L', (SIZE, SIZE))
+    ImageDraw.Draw(mask).text(xy, text, font=face, fill=SHADOW, stroke_width=stroke, stroke_fill=SHADOW, align='center')
+    return mask.filter(ImageFilter.MaxFilter(2 * (size // 12) + 1)).filter(ImageFilter.GaussianBlur(size / 6))
 
 
 def render(data, label, dest, size=SIZE // 5):
     """A square crop, darkened, with the label centred; the plain photo when Kodi's Python lacks PIL."""
     tmp = dest + '.tmp'
     try:
-        from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
+        from PIL import Image, ImageDraw, ImageEnhance, ImageOps
     except ImportError:
         with open(tmp, 'wb') as f:
             f.write(data)
@@ -173,12 +190,11 @@ def render(data, label, dest, size=SIZE // 5):
     im = ImageEnhance.Brightness(ImageOps.fit(im, (SIZE, SIZE), Image.LANCZOS)).enhance(DIM)
     draw = ImageDraw.Draw(im)
     face, stroke = font(size)
-    left, top, right, bottom = draw.textbbox((0, 0), label, font=face, stroke_width=stroke)
+    text = lines(draw, label, face, stroke) or label
+    left, top, right, bottom = draw.textbbox((0, 0), text, font=face, stroke_width=stroke, align='center')
     xy = ((SIZE - (right - left)) / 2 - left, (SIZE - (bottom - top)) / 2 - top)
-    shadow = Image.new('L', im.size)                        # a soft dark halo, so bright pictures stay readable
-    ImageDraw.Draw(shadow).text(xy, label, font=face, fill=SHADOW, stroke_width=stroke + size // 12, stroke_fill=SHADOW)
-    im.paste((0, 0, 0), mask=shadow.filter(ImageFilter.GaussianBlur(size / 6)))
-    draw.text(xy, label, font=face, fill=(255, 255, 255), stroke_width=stroke, stroke_fill=(255, 255, 255))
+    im.paste((0, 0, 0), mask=halo(xy, text, face, stroke, size))
+    draw.text(xy, text, font=face, fill=(255, 255, 255), stroke_width=stroke, stroke_fill=(255, 255, 255), align='center')
     im.save(tmp, 'JPEG', quality=88)
     os.replace(tmp, dest)
 
