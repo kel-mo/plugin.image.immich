@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.image.immich" name="Immich" version="0.3.3" provider-name="kel-mo">
+<addon id="plugin.image.immich" name="Immich" version="0.3.4" provider-name="kel-mo">
   <requires>
     <import addon="xbmc.python" version="3.0.1"/>
   </requires>
@@ -16,7 +16,9 @@
     <license>GPL-2.0-or-later</license>
     <source>https://github.com/kel-mo/plugin.image.immich</source>
     <website>https://immich.app</website>
-    <news>v0.3.3
+    <news>v0.3.4
+- Kodi no longer waits long on a slow server when it quits while tiles are drawn
+v0.3.3
 - Long tile names wrap onto two lines, so every name stays larger
 - Tiles redraw straight after an update
 v0.3.2
