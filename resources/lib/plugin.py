@@ -11,7 +11,7 @@ import xbmc
 import xbmcgui
 import xbmcplugin
 
-from . import items, kodi, signin, tiles, viewer
+from . import items, kodi, proxy, signin, tiles, viewer
 from .api import ApiError, AuthError, ImmichClient
 
 BASE = 'plugin://{}/'.format(kodi.ADDON_ID)
@@ -360,10 +360,12 @@ def source_assets(client, params):
 
 
 def video(client, asset_id):
-    li = xbmcgui.ListItem(path=client.video_url(asset_id), offscreen=True)
+    url = client.video_url(asset_id)
+    li = xbmcgui.ListItem(path=url, offscreen=True)
     li.setMimeType('video/mp4')
     li.setContentLookup(False)
     xbmcplugin.setResolvedUrl(HANDLE, True, li)
+    proxy.wait_for_kodi(url)           # Kodi deadlocks if our teardown overlaps its check of the URL
 
 
 def play(client, params):
