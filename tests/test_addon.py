@@ -13,6 +13,7 @@ from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest import mock
 from urllib.error import HTTPError
+from urllib.parse import parse_qsl
 from urllib.request import Request, urlopen
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -950,6 +951,57 @@ def close(a, b):
 
 
 @unittest.skipUnless(PIL, 'needs PIL')
+class PhotoOrder(NoProxy):
+    """Photos run oldest first unless the setting says newest first; search stays best match first."""
+
+    SOURCES = [{'source': 'album', 'album_id': 'album-1'}, {'source': 'person', 'person_id': 'person-0'},
+               {'source': 'favourites'}, {'source': 'place', 'city': 'Perth'}, {'source': 'memories', 'year': '2025'}]
+
+    def setUp(self):
+        super().setUp()
+        self.client = api.ImmichClient()
+        year = max(b['timeBucket'][:4] for b in self.client.timeline_buckets())
+        self.month = next(b['timeBucket'] for b in self.client.timeline_buckets() if b['timeBucket'].startswith(year))
+        self.sources = self.SOURCES + [{'source': 'year', 'year': year}, {'source': 'bucket', 'bucket': self.month}]
+
+    def taken(self, params):
+        return [a['taken'] for a in plugin.source_assets(self.client, params)]
+
+    def months(self, year):
+        del xbmcplugin.ITEMS[:]
+        plugin.timeline(self.client, year)
+        return [dict(parse_qsl(url.split('?')[1]))['bucket'] for url, _, _ in xbmcplugin.ITEMS]
+
+    def test_oldest_first(self):
+        for params in self.sources:
+            found = self.taken(params)
+            self.assertGreater(len(found), 1, params)
+            self.assertEqual(found, sorted(found), params)
+        months = self.months(self.month[:4])
+        self.assertEqual(months, sorted(months))
+
+    def test_newest_first(self):
+        with mock.patch.dict(xbmcaddon.SETTINGS, {'photo_order': '1'}):
+            for params in self.sources:
+                found = self.taken(params)
+                self.assertEqual(found, sorted(found, reverse=True), params)
+            months = self.months(self.month[:4])
+            self.assertEqual(months, sorted(months, reverse=True))
+
+    def test_listings_match_slideshows(self):
+        for action, params in (('bucket', {'bucket': self.month}), ('album', {'album_id': 'album-1'})):
+            del xbmcplugin.ITEMS[:]
+            getattr(plugin, action)(self.client, params)
+            listed = [dict(parse_qsl(li.ctx[0][1].split('?')[1].rstrip(')')))['start'] for _, li, _ in xbmcplugin.ITEMS
+                      if li.ctx and 'start=' in li.ctx[0][1]]
+            played = [a['id'] for a in plugin.source_assets(self.client, dict(params, source=action))]
+            self.assertEqual(listed, played, action)
+
+    def test_memories_newest_year_first(self):
+        years = [y for y, _ in plugin.today_memories(self.client)]
+        self.assertEqual(years, sorted(years, reverse=True))
+
+
 class Backdrop(unittest.TestCase):
     def photo(self, w, h):
         from PIL import Image

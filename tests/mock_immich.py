@@ -148,7 +148,8 @@ class Handler(BaseHTTPRequestHandler):
                 counts[bucket_key(a)] = counts.get(bucket_key(a), 0) + 1
             return self.send(200, [{'timeBucket': k, 'count': v} for k, v in sorted(counts.items(), reverse=True)])
         if p == '/api/timeline/bucket':
-            return self.send(200, columnar([a for a in items if bucket_key(a) == q.get('timeBucket')]))
+            found = [a for a in items if bucket_key(a) == q.get('timeBucket')]
+            return self.send(200, columnar(found[::-1] if q.get('order') == 'asc' else found))
         if p == '/api/albums':
             return self.send(200, [{'id': al['id'], 'albumName': al['albumName'], 'assetCount': len(al['members']),
                                     'albumThumbnailAssetId': al['members'][0]['id'] if al['members'] else None,
