@@ -280,14 +280,6 @@ msgctxt "#30408"
 msgid "Describe the photos to show, for example: beach at sunset"
 msgstr ""
 
-msgctxt "#30500"
-msgid "Advanced"
-msgstr ""
-
-msgctxt "#30501"
-msgid "Debug logging"
-msgstr ""
-
 # Messages 30600-30699
 
 msgctxt "#30601"

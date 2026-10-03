@@ -52,7 +52,7 @@ def log(msg, level=xbmc.LOGINFO):
 
 
 def debug(msg):
-    log(msg, xbmc.LOGINFO if setting_bool('debug') else xbmc.LOGDEBUG)
+    log(msg, xbmc.LOGDEBUG)
 
 
 def notify(message, heading=None, icon=None, time=4000):

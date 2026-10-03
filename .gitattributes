@@ -1,0 +1,6 @@
+resources/icon.svg export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore
+tests export-ignore
+build.py export-ignore
+.github export-ignore
