@@ -292,6 +292,18 @@ class Proxy(unittest.TestCase):
             urlopen(f'{self.base}/fanart/not-an-id', timeout=10)
         self.assertEqual(got.exception.code, 404)
 
+    def test_person_fanart_passes_over_a_group_shot(self):
+        person, group = mock_immich.PEOPLE[0], mock_immich.ASSETS[1]          # group: also person 1's
+        alone = person['members'][0]
+        with mock.patch.dict(person, members=[group] + person['members']):
+            with urlopen(f'{self.base}/fanart/person/{person["id"]}', timeout=10) as resp:
+                got = resp.read()
+        with urlopen(f'{self.base}/fanart/{alone["id"]}', timeout=10) as resp:
+            self.assertEqual(got, resp.read())
+        with self.assertRaises(HTTPError) as got:
+            urlopen(f'{self.base}/fanart/person/0000', timeout=10)          # nobody, so no photo
+        self.assertEqual(got.exception.code, 502)
+
     def done(self, since):
         entries = [e.rpartition('@') for e in xbmcgui.Window(10000).getProperty(proxy.DONE).split()]
         return [name for name, _, at in entries if float(at) >= since]
@@ -936,6 +948,12 @@ class Covers(NoProxy):
             plugin.timeline(self.client)
         self.assertNotIn('1999-01-01T00:00:00.000Z', kodi.read_json(self.path))
 
+    def test_albums_fit_their_cover_to_the_screen(self):
+        albums = self.listing(lambda: plugin.albums(self.client))
+        self.assertTrue(albums)
+        for name, art in albums.items():
+            self.assertIn('/fanart/', art['fanart'], name)
+
     def test_countries_show_a_city_photo(self):
         countries = self.listing(lambda: plugin.places(self.client))
         self.assertGreater(len(countries), 1)
@@ -953,7 +971,7 @@ def close(a, b):
 class PhotoOrder(NoProxy):
     """Photos run oldest first unless the setting says newest first; search stays best match first."""
 
-    SOURCES = [{'source': 'album', 'album_id': 'album-1'}, {'source': 'person', 'person_id': 'person-0'},
+    SOURCES = [{'source': 'album', 'album_id': 'album-1'}, {'source': 'person', 'person_id': mock_immich.PEOPLE[0]['id']},
                {'source': 'favourites'}, {'source': 'place', 'city': 'Perth'}, {'source': 'memories', 'year': '2025'}]
 
     def setUp(self):

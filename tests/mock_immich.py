@@ -37,7 +37,7 @@ BY_ID = {a['id']: a for a in ASSETS}
 ALBUMS = [{'id': 'album-1', 'albumName': 'Holidays', 'members': ASSETS[0:40]},
           {'id': 'album-2', 'albumName': 'Garden', 'members': ASSETS[40:52]},
           {'id': 'album-3', 'albumName': 'Empty', 'members': []}]
-PEOPLE = [{'id': 'person-{}'.format(i), 'name': name, 'isHidden': False, 'isFavorite': False,
+PEOPLE = [{'id': 'feed0000-0000-4000-8000-00000000000{}'.format(i), 'name': name, 'isHidden': False, 'isFavorite': False,
            'members': [a for a in ASSETS if a['n'] % 5 == i]}
           for i, name in enumerate(['Alex', '', 'Sam', '', ''])]
 FAVOURITES = [a for a in ASSETS if a['n'] % 5 == 0]
@@ -51,6 +51,8 @@ def filtered(body):
         items = next((p['members'] for p in PEOPLE if p['id'] == body['personIds'][0]), [])
     if body.get('city'):
         items = [a for a in items if a['city'] == body['city']]
+    if body.get('type') == 'IMAGE':
+        items = [a for a in items if not a['video']]
     if body.get('isFavorite'):
         items = [a for a in items if a in FAVOURITES]
     return list(reversed(items)) if body.get('order') == 'asc' else items
@@ -60,7 +62,11 @@ def paged(items, body):
     page, size = int(body.get('page') or 1), int(body.get('size') or 250)
     chunk = items[(page - 1) * size:page * size]
     nxt = str(page + 1) if page * size < len(items) else None
-    return {'assets': {'items': [asset_dto(a) for a in chunk], 'nextPage': nxt, 'count': len(chunk),
+    dtos = [asset_dto(a) for a in chunk]
+    if body.get('withPeople'):
+        for dto, a in zip(dtos, chunk):
+            dto['people'] = [{'id': p['id'], 'name': p['name']} for p in PEOPLE if a in p['members']]
+    return {'assets': {'items': dtos, 'nextPage': nxt, 'count': len(chunk),
                        'total': len(items)}}
 
 

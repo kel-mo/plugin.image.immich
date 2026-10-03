@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Local media proxy: Kodi fetches from 127.0.0.1 and the proxy adds the API key, so the key stays out
 of Kodi's logs and texture cache."""
+import json
 import os
 import re
 import socket
@@ -26,7 +27,8 @@ PHOTO = re.compile(r'/api/assets/([0-9a-f-]+)/thumbnail$')
 TIMEOUT = 4                              # per socket wait: a relay under way ends inside Kodi's five-second wait at exit
 CHUNK = 64 * 1024
 _done_lock = threading.Lock()
-FANART = re.compile(r'/fanart/([0-9a-f-]+)$')     # a preview composed to 16:9, see backdrop.py
+PORTRAITS = 50                           # recent photos a person's fanart is picked from
+FANART = re.compile(r'/fanart/(person/)?([0-9a-f-]+)$')     # a preview composed to 16:9, see backdrop.py
 ALLOWED = re.compile(r'/api/(assets/[0-9a-f-]+/(thumbnail|original|video/playback)|people/[0-9a-f-]+/thumbnail)$')
 REQUEST_HEADERS = ('Range', 'If-None-Match', 'If-Modified-Since')
 RESPONSE_HEADERS = ('Content-Type', 'Content-Length', 'Content-Range', 'Accept-Ranges', 'Cache-Control', 'ETag',
@@ -79,7 +81,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_error(403)
         base_url, api_key = self.server.upstream
         if FANART.match(path) and base_url:
-            return self.fanart(FANART.match(path).group(1), base_url, api_key)
+            person, asset_id = FANART.match(path).groups()
+            return self.fanart(asset_id, base_url, api_key, bool(person))
         if not ALLOWED.match(path) or not base_url:
             return self.send_error(404)
         headers = {k: self.headers[k] for k in REQUEST_HEADERS if self.headers.get(k)}
@@ -111,14 +114,16 @@ class Handler(BaseHTTPRequestHandler):
                     announce(path, self.path)
 
 
-    def fanart(self, asset_id, base_url, api_key):
-        """The asset's preview, composed to fit the screen."""
-        req = Request('{}/api/assets/{}/thumbnail?size=preview&edited=true'.format(base_url, asset_id),
-                      headers={'x-api-key': api_key})
+    def fanart(self, asset_id, base_url, api_key, person=False):
+        """The asset's preview, or a photo of a person, composed to fit the screen."""
         try:
+            if person:
+                asset_id = self.portrait(asset_id, base_url, api_key)
+            req = Request('{}/api/assets/{}/thumbnail?size=preview&edited=true'.format(base_url, asset_id),
+                          headers={'x-api-key': api_key})
             with urlopen(req, timeout=TIMEOUT, context=self.server.ssl_ctx) as resp:
                 data = resp.read()
-        except (HTTPError, URLError, socket.timeout, OSError) as e:
+        except (HTTPError, URLError, socket.timeout, OSError, ValueError, LookupError) as e:
             kodi.log('proxy: fanart {} failed: {}'.format(asset_id, e), xbmc.LOGWARNING)
             return self.send_error(502)
         try:
@@ -135,6 +140,17 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(data)
             except OSError:
                 pass
+
+    def portrait(self, person_id, base_url, api_key):
+        """Of their recent photos, the newest with the fewest people, so a group shot doesn't stand in for all.
+        Looked up only when Kodi shows the person's fanart: a lookup each in the listing is too slow."""
+        body = {'personIds': [person_id], 'type': 'IMAGE', 'visibility': 'timeline', 'size': PORTRAITS,
+                'withPeople': True}
+        req = Request(base_url + '/api/search/metadata', data=json.dumps(body).encode(), method='POST',
+                      headers={'x-api-key': api_key, 'Content-Type': 'application/json'})
+        with urlopen(req, timeout=TIMEOUT, context=self.server.ssl_ctx) as resp:
+            found = json.loads(resp.read())['assets']['items']
+        return min(found, key=lambda a: len(a.get('people') or []))['id']
 
 
 def announce(path, full):

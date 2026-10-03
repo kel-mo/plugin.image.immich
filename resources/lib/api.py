@@ -236,6 +236,10 @@ class ImmichClient:
     def person_thumb_url(self, person_id):
         return self.media_url('/people/{}/thumbnail'.format(person_id))
 
+    def person_fanart_url(self, person_id):
+        """A recent photo of them, composed to fit the screen by the proxy."""
+        return proxy_address() + '/fanart/person/' + person_id
+
     def video_url(self, asset_id):
         return self.media_url('/assets/{}/video/playback'.format(asset_id))
 
