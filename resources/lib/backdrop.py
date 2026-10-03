@@ -22,6 +22,7 @@ def compose(data, pixel=False, aspect=None, look=None):
         return data
     im = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert('RGB')
     w, h = im.size
+    source = im
     if abs(w / h - SCREEN) < SLACK and (not pixel or h >= CANVAS[1]):
         return data
     if pixel:
@@ -37,8 +38,8 @@ def compose(data, pixel=False, aspect=None, look=None):
         size = CANVAS
     else:
         size = (round(h * SCREEN), h) if w / h < SCREEN else (w, round(w / SCREEN))   # the picture's own size: never enlarged
-    back = ImageOps.fit(im, BLUR, Image.LANCZOS).filter(ImageFilter.GaussianBlur(3)).resize(size, Image.BICUBIC)
-    back = ImageEnhance.Brightness(back).enhance(DIM)
+    back = ImageEnhance.Brightness(ImageOps.fit(source, BLUR, Image.LANCZOS).filter(ImageFilter.GaussianBlur(3))).enhance(DIM)
+    back = back.resize(size, Image.BICUBIC)                      # blurred and dimmed small, then stretched: quick
     back.paste(im, ((size[0] - w) // 2, (size[1] - h) // 2))
     out = io.BytesIO()
     back.save(out, 'JPEG', quality=88, subsampling=0 if look in LOOKS else -1)   # full chroma keeps the stripes
