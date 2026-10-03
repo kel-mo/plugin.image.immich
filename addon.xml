@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.image.immich" name="Immich" version="0.3.13" provider-name="kel-mo">
+<addon id="plugin.image.immich" name="Immich" version="0.3.14" provider-name="kel-mo">
   <requires>
     <import addon="xbmc.python" version="3.1.0"/>
   </requires>
@@ -16,7 +16,10 @@
     <license>GPL-2.0-or-later</license>
     <source>https://github.com/kel-mo/plugin.image.immich</source>
     <website>https://immich.app</website>
-    <news>v0.3.13
+    <news>v0.3.14
+- Photos play and list oldest first, so a trip runs from start to finish. Photo order in the settings turns it back
+- The months of a year go January to December; On this day keeps the latest year first
+v0.3.13
 - 0.3.12 said playing a video could no longer freeze Kodi for a minute. Sorry, that was wrong: the freeze is a Kodi 22 bug, fixed upstream in xbmc/xbmc#29548
 - The slideshow reads the screen size once, so it can no longer hold up another add-on the same way
 v0.3.12
@@ -38,13 +41,7 @@ v0.3.5
 - Tiles stay on the menu: Immich favourites no longer get one, so pick a thumbnail again for any that did
 - Kodi quits promptly even with a photo or tile request under way
 v0.3.4
-- Kodi no longer waits long on a slow server when it quits while tiles are drawn
-v0.3.3
-- Long tile names wrap onto two lines, so every name stays larger
-- Tiles redraw straight after an update
-v0.3.2
-- Shuffle everything gets a photo tile too
-- A soft shadow keeps tile names readable on bright photos</news>
+- Kodi no longer waits long on a slow server when it quits while tiles are drawn</news>
     <assets>
       <icon>resources/icon.png</icon>
       <fanart>resources/fanart.jpg</fanart>
