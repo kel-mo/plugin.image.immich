@@ -648,14 +648,15 @@ class KenBurns(NoProxy):
         self.viewer(zoom=125)
         self.assertEqual(self.window.zoom, 110)
 
-    def test_zoom_stops_at_original_pixels(self):
+    def test_screen_sized_photo_zooms(self):
+        main = self.viewer(height='2160', size=(3840, 2160), hires=True)    # one to one on a 4K screen
+        self.assertEqual(sorted(main.net_zoom()), [net(100), net(110)])
         main = self.viewer(height='2160', size=(4000, 2250), hires=True)
-        top = 2250 / 2160                                   # one original pixel per screen pixel
-        self.assertEqual(sorted(main.net_zoom()), [net(100), net(100 * top)])
+        self.assertEqual(sorted(main.net_zoom()), [net(100), net(110)])
 
-    def test_panorama_stops_at_original_pixels(self):
+    def test_panorama_zooms_as_it_pans(self):
         main = self.viewer(height='2160', ratio=3.92, size=(12672, 2200), hires=True)
-        self.assertEqual(sorted(main.net_zoom()), [net(100), net(100 * (2200 / 2160))])
+        self.assertEqual(sorted(main.net_zoom()), [net(100), net(110)])
         self.assertTrue(main.net_slide())
 
     def test_enlarged_preview_still_zooms(self):
