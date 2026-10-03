@@ -277,6 +277,22 @@ class Proxy(unittest.TestCase):
             with self.assertRaises((http.client.HTTPException, OSError)):
                 conn.getresponse()
 
+    def test_wait_for_kodi(self):
+        url = f'{self.base}/api/assets/{self.asset}/video/playback'
+        try:                                            # Kodi's check of a resolved URL
+            urlopen(Request(url, method='HEAD'), timeout=10).close()
+        except HTTPError as e:
+            e.close()
+        t = time.time()
+        proxy.wait_for_kodi(url)                        # noted once the reply is out, a moment after Kodi has it
+        self.assertLess(time.time() - t, 0.5)
+        t = time.time()
+        proxy.wait_for_kodi(f'{self.base}/api/assets/{mock_immich.ASSETS[-1]["id"]}/original', limit=0.3)
+        self.assertLess(time.time() - t, 1)
+        t = time.time()
+        proxy.wait_for_kodi('https://immich.lan/api/assets/x/video/playback')
+        self.assertLess(time.time() - t, 0.1)
+
     @unittest.skipUnless(PIL, 'needs PIL')
     def test_fanart_composed_to_fit(self):
         from PIL import Image
