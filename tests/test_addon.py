@@ -950,7 +950,6 @@ def close(a, b):
     return max(abs(x - y) for x, y in zip(a, b)) <= 3
 
 
-@unittest.skipUnless(PIL, 'needs PIL')
 class PhotoOrder(NoProxy):
     """Photos run oldest first unless the setting says newest first; search stays best match first."""
 
@@ -1002,6 +1001,7 @@ class PhotoOrder(NoProxy):
         self.assertEqual(years, sorted(years, reverse=True))
 
 
+@unittest.skipUnless(PIL, 'needs PIL')
 class Backdrop(unittest.TestCase):
     def photo(self, w, h):
         from PIL import Image
