@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.image.immich" name="Immich" version="0.3.12" provider-name="kel-mo">
+<addon id="plugin.image.immich" name="Immich" version="0.3.13" provider-name="kel-mo">
   <requires>
     <import addon="xbmc.python" version="3.1.0"/>
   </requires>
@@ -16,7 +16,10 @@
     <license>GPL-2.0-or-later</license>
     <source>https://github.com/kel-mo/plugin.image.immich</source>
     <website>https://immich.app</website>
-    <news>v0.3.12
+    <news>v0.3.13
+- 0.3.12 said playing a video could no longer freeze Kodi for a minute. Sorry, that was wrong: the freeze is a Kodi 22 bug, fixed upstream in xbmc/xbmc#29548
+- The slideshow reads the screen size once, so it can no longer hold up another add-on the same way
+v0.3.12
 - Playing a video can no longer freeze Kodi for a minute
 v0.3.11
 - Needs Kodi 22; a fanart for the add-on; debug lines only in Kodi's debug log
@@ -41,13 +44,7 @@ v0.3.3
 - Tiles redraw straight after an update
 v0.3.2
 - Shuffle everything gets a photo tile too
-- A soft shadow keeps tile names readable on bright photos
-v0.3.1
-- Photo tiles: the menu and Immich favourites show one of your photos with the folder's name, a new one each day
-- Rotated phone portraits zoom again on 4K screens
-v0.3.0
-- Pausing eases the photo back to the whole picture and shows it at its sharpest
-- The caption, clock and Paused have an outline instead of a dark band along the screen edge</news>
+- A soft shadow keeps tile names readable on bright photos</news>
     <assets>
       <icon>resources/icon.png</icon>
       <fanart>resources/fanart.jpg</fanart>
