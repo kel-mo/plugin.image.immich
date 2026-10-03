@@ -1200,7 +1200,7 @@ class Screensaver(NoProxy):
         self.assertEqual(points.get('xbmc.ui.screensaver'), 'screensaver.py')
         self.assertTrue(os.path.exists(os.path.join(ROOT, 'screensaver.py')))
 
-    def run_screensaver(self, source, found, query='', albums=''):
+    def run_screensaver(self, source, found, query='', albums='', ordered=True):
         from resources.lib import screensaver
         shown, self.asked = [], []
 
@@ -1212,7 +1212,10 @@ class Screensaver(NoProxy):
         with mock.patch.object(kodi, 'setting_int', lambda k: source if k == 'screensaver_source' else 0), \
                 mock.patch.object(kodi, 'setting', lambda k, setting=kodi.setting: {'screensaver_query': query,
                                                                                     'screensaver_albums': albums}.get(k) or setting(k)), \
+                mock.patch.object(kodi, 'setting_bool', lambda k, setting=kodi.setting_bool:
+                                  not ordered if k == 'screensaver_shuffle' else setting(k)), \
                 mock.patch.object(plugin, 'source_assets', source_assets), \
+                mock.patch.object(screensaver.random, 'shuffle', list.reverse), \
                 mock.patch.object(viewer, 'play', lambda client, assets, **kw: shown.append((assets, kw))):
             screensaver.run()
         return shown
@@ -1246,6 +1249,22 @@ class Screensaver(NoProxy):
         (assets, kw), = shown
         self.assertEqual(sorted(a['id'] for a in assets), ['x', 'y'])
         self.assertIsNone(kw.get('more'))
+
+    def test_albums_in_order(self):
+        found = {'album-1': [{'id': 'h1', 'image': True}, {'id': 'h2', 'image': True}],
+                 'album-2': [{'id': 'g1', 'image': True}, {'id': 'g2', 'image': True}]}
+        (assets, _), = self.run_screensaver(4, found, albums='album-1,album-2')
+        self.assertEqual([a['id'] for a in assets], ['g1', 'g2', 'h1', 'h2'])     # Garden is the older album
+        with mock.patch.object(plugin, 'newest_first', return_value=True):
+            (assets, _), = self.run_screensaver(4, found, albums='album-1,album-2')
+        self.assertEqual([a['id'] for a in assets], ['h1', 'h2', 'g1', 'g2'])
+        (assets, _), = self.run_screensaver(4, found, albums='album-1,album-2', ordered=False)
+        self.assertEqual([a['id'] for a in assets], ['g2', 'g1', 'h2', 'h1'])     # shuffled (reversed here)
+
+    def test_in_order_is_for_albums_only(self):
+        found = {'favourites': [{'id': 'a', 'image': True}, {'id': 'b', 'image': True}]}
+        (assets, _), = self.run_screensaver(2, found)
+        self.assertEqual([a['id'] for a in assets], ['b', 'a'])
 
     def test_no_albums_falls_back_to_random(self):
         shown = self.run_screensaver(4, {'random': [{'id': 'r', 'image': True}]})
@@ -1397,8 +1416,8 @@ class Screensaver(NoProxy):
         query = next(s for s in ET.parse(os.path.join(ROOT, 'resources', 'settings.xml')).iter('setting')
                      if s.get('id') == 'screensaver_query')
         pick = [s.get('label') for s in ET.parse(os.path.join(ROOT, 'resources', 'settings.xml')).iter('setting')
-                if s.get('id') in ('screensaver_pick_albums', 'screensaver_album_names')]
-        self.assertEqual((len(labels), len(pick)), (6, 2))
+                if s.get('id') in ('screensaver_pick_albums', 'screensaver_album_names', 'screensaver_shuffle')]
+        self.assertEqual((len(labels), len(pick)), (6, 3))
         self.assertTrue(all(f'msgctxt "#{n}"' in po for n in labels + pick + [setting.get('label'), query.get('label')]))
 
 

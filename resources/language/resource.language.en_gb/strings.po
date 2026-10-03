@@ -312,6 +312,10 @@ msgctxt "#30412"
 msgid "Random album"
 msgstr ""
 
+msgctxt "#30413"
+msgid "Mix the photos of the albums. When off, each album plays from start to finish, one album after another, following Photo order in the Slideshow settings."
+msgstr ""
+
 # Messages 30600-30699
 
 msgctxt "#30601"

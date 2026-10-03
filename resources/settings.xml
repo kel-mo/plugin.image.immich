@@ -213,6 +213,14 @@
           </control>
           <enable>false</enable>
         </setting>
+        <setting id="screensaver_shuffle" type="boolean" label="30209" help="30413">
+          <level>0</level>
+          <default>false</default>
+          <dependencies>
+            <dependency type="visible" setting="screensaver_source" operator="gt">3</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
         <setting id="screensaver_albums" type="string" label="" help="">
           <level>4</level>
           <default></default>

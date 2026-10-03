@@ -8,15 +8,24 @@ from . import kodi, plugin, viewer
 from .api import ApiError, ImmichClient
 
 SOURCES = ('memories', 'random', 'favourites', 'search', 'albums', 'random_album')
+ALBUM_SOURCES = ('albums', 'random_album')
 
 
 def photos(client, source, **params):
     return [a for a in plugin.source_assets(client, dict(params, source=source)) if a['image']]
 
 
+def in_order(source):
+    return source in ALBUM_SOURCES and not kodi.setting_bool('screensaver_shuffle')
+
+
 def album_photos(client):
+    chosen = [i for i in kodi.setting('screensaver_albums').split(',') if i]
+    if in_order('albums'):                      # albums by date, each one's photos in the chosen photo order
+        dates = {a['id']: a.get('startDate') or '' for a in client.albums()}
+        chosen.sort(key=lambda i: dates.get(i, ''), reverse=plugin.newest_first())
     found = {}
-    for album_id in filter(None, kodi.setting('screensaver_albums').split(',')):
+    for album_id in chosen:
         try:
             found.update((a['id'], a) for a in photos(client, 'album', album_id=album_id))
         except ApiError as e:                   # album gone since it was picked
@@ -51,5 +60,6 @@ def run():
     except ApiError as e:
         kodi.log('screensaver: {}'.format(e), xbmc.LOGWARNING)
         return
-    random.shuffle(assets)
+    if not in_order(source):
+        random.shuffle(assets)
     viewer.play(client, assets, more=client.random if source == 'random' else None, screensaver=True)
