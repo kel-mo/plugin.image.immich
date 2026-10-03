@@ -15,7 +15,7 @@ from urllib.request import Request, urlopen
 import xbmc
 import xbmcgui
 
-from . import api, kodi
+from . import api, backdrop, kodi
 
 PORT = 52283                             # fixed so Kodi's texture cache keeps its addresses
 TRIES = 10
@@ -26,6 +26,7 @@ PHOTO = re.compile(r'/api/assets/([0-9a-f-]+)/thumbnail$')
 TIMEOUT = 4                              # per socket wait: a relay under way ends inside Kodi's five-second wait at exit
 CHUNK = 64 * 1024
 _done_lock = threading.Lock()
+FANART = re.compile(r'/fanart/([0-9a-f-]+)$')     # a preview composed to 16:9, see backdrop.py
 ALLOWED = re.compile(r'/api/(assets/[0-9a-f-]+/(thumbnail|original|video/playback)|people/[0-9a-f-]+/thumbnail)$')
 REQUEST_HEADERS = ('Range', 'If-None-Match', 'If-Modified-Since')
 RESPONSE_HEADERS = ('Content-Type', 'Content-Length', 'Content-Range', 'Accept-Ranges', 'Cache-Control', 'ETag',
@@ -65,6 +66,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get('Host') not in self.server.hosts:   # DNS rebinding
             return self.send_error(403)
         base_url, api_key = self.server.upstream
+        if FANART.match(path) and base_url:
+            return self.fanart(FANART.match(path).group(1), base_url, api_key)
         if not ALLOWED.match(path) or not base_url:
             return self.send_error(404)
         headers = {k: self.headers[k] for k in REQUEST_HEADERS if self.headers.get(k)}
@@ -94,6 +97,32 @@ class Handler(BaseHTTPRequestHandler):
                     return                      # Kodi hangs up when it seeks, or the server drops out
                 if resp.status in (200, 206):
                     announce(path, self.path)
+
+
+    def fanart(self, asset_id, base_url, api_key):
+        """The asset's preview, composed to fit the screen."""
+        req = Request('{}/api/assets/{}/thumbnail?size=preview&edited=true'.format(base_url, asset_id),
+                      headers={'x-api-key': api_key})
+        try:
+            with urlopen(req, timeout=TIMEOUT, context=self.server.ssl_ctx) as resp:
+                data = resp.read()
+        except (HTTPError, URLError, socket.timeout, OSError) as e:
+            kodi.log('proxy: fanart {} failed: {}'.format(asset_id, e), xbmc.LOGWARNING)
+            return self.send_error(502)
+        try:
+            data = backdrop.compose(data)
+        except (OSError, ValueError) as e:              # PIL raises OSError for unreadable images
+            kodi.log('proxy: fanart {} not composed: {}'.format(asset_id, e), xbmc.LOGWARNING)
+        self.send_response(200)
+        self.send_header('Content-Type', 'image/jpeg' if data[:2] == b'\xff\xd8' else 'image/png' if data[:4] == b'\x89PNG' else 'image/webp')
+        self.send_header('Content-Length', str(len(data)))
+        self.send_header('Cache-Control', 'private, max-age=86400')
+        self.end_headers()
+        if self.command == 'GET':
+            try:
+                self.wfile.write(data)
+            except OSError:
+                pass
 
 
 def announce(path, full):

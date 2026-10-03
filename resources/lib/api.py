@@ -224,6 +224,10 @@ class ImmichClient:
         return self.media_url('/assets/{}/thumbnail'.format(asset_id), size=size,
                               edited=None if size == 'fullsize' else 'true')
 
+    def fanart_url(self, asset_id):
+        """The preview composed to fit the screen, by the proxy."""
+        return proxy_address() + '/fanart/' + asset_id
+
     def image(self, asset_id, size='preview'):
         """A thumbnail's bytes, straight from the server rather than through the proxy."""
         return self.request('GET', '/assets/{}/thumbnail'.format(quote(asset_id)), params={'size': size, 'edited': 'true'},
