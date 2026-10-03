@@ -10,7 +10,6 @@ import time
 from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, unquote, urlsplit
 from urllib.request import Request, urlopen
 
 import xbmc
@@ -23,7 +22,6 @@ TRIES = 10
 PROPERTY = '{}.proxy'.format(kodi.ADDON_ID)   # Home window property holding the port
 DONE = '{}.done'.format(kodi.ADDON_ID)       # Home window property: photos fully sent, as id:size@time
 DONE_KEEP = 8
-SEEN_KEEP = 10                           # seconds a HEAD from Kodi is remembered, for wait_for_kodi()
 PHOTO = re.compile(r'/api/assets/([0-9a-f-]+)/thumbnail$')
 TIMEOUT = 4                              # per socket wait: a relay under way ends inside Kodi's five-second wait at exit
 CHUNK = 64 * 1024
@@ -49,7 +47,6 @@ class Server(ThreadingHTTPServer):
         super().__init__(('127.0.0.1', port), Handler)
         self.hosts = {'127.0.0.1:{}'.format(port), 'localhost:{}'.format(port)}
         self.ssl_ctx = ssl.create_default_context()
-        self.seen = {}                          # path: time of Kodi's last HEAD
         self.open = set()                       # connections under way, cut when Kodi quits
         self.open_lock = threading.Lock()
 
@@ -59,7 +56,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def setup(self):
         super().setup()
-        self.answered = None                    # a HEAD from Kodi, noted once its reply is out
         with self.server.open_lock:
             self.server.open.add(self.connection)
 
@@ -67,10 +63,6 @@ class Handler(BaseHTTPRequestHandler):
         with self.server.open_lock:
             self.server.open.discard(self.connection)
         super().finish()
-        if self.answered:
-            now = time.time()
-            self.server.seen = {p: t for p, t in self.server.seen.items() if now - t < SEEN_KEEP}
-            self.server.seen[self.answered] = now
 
     def log_message(self, fmt, *args):
         kodi.debug('proxy: ' + fmt % args)
@@ -85,18 +77,11 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split('?', 1)[0]
         if self.headers.get('Host') not in self.server.hosts:   # DNS rebinding
             return self.send_error(403)
-        if path.startswith('/seen/'):
-            stamp = self.server.seen.get(unquote(path[len('/seen'):]))
-            self.send_response(200 if stamp and time.time() - stamp < SEEN_KEEP else 404)
-            self.send_header('Content-Length', '0')
-            return self.end_headers()
         base_url, api_key = self.server.upstream
         if FANART.match(path) and base_url:
             return self.fanart(FANART.match(path).group(1), base_url, api_key)
         if not ALLOWED.match(path) or not base_url:
             return self.send_error(404)
-        if self.command == 'HEAD':
-            self.answered = path
         headers = {k: self.headers[k] for k in REQUEST_HEADERS if self.headers.get(k)}
         headers['x-api-key'] = api_key
         req = Request(base_url + self.path, headers=headers, method=self.command)
@@ -192,26 +177,6 @@ def stop(server):
                 conn.shutdown(socket.SHUT_RDWR)
             except OSError:
                 pass
-
-
-def wait_for_kodi(url, limit=5):
-    """Keep the plugin alive until Kodi's main thread has checked url through the proxy."""
-    parts = urlsplit(url)
-    if parts.hostname != '127.0.0.1':
-        return
-    probe = '{}://{}/seen{}'.format(parts.scheme, parts.netloc, quote(parts.path))
-    monitor = xbmc.Monitor()
-    end = time.time() + limit
-    while time.time() < end:
-        try:
-            with urlopen(probe, timeout=1):
-                return
-        except HTTPError as e:
-            e.close()
-        except (URLError, OSError):
-            return
-        if monitor.waitForAbort(0.05):
-            return
 
 
 def forget_cached(url):

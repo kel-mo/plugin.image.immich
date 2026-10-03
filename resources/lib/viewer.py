@@ -137,6 +137,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.zoom = min(max(kodi.setting_int('zoom'), 100), 110)
         sample = SUPERSAMPLE if kodi.setting_bool('smooth_zoom') else 1.0   # needs Kodi with mipmapped textures
         self.scale = self.zoom / 100.0 * sample if self.kenburns else 1.0   # how far photo controls outsize the screen
+        self.height = gui_height()        # once: getInfoLabel keeps the GIL while it waits on Kodi's GUI lock
         self.size = 'preview'
         if kodi.setting_bool('hires'):
             try:
@@ -352,7 +353,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         if not (self.kenburns and asset['image'] and asset['ratio'] >= PAN_WIDE):
             return False
         tall = self.source_height(asset)
-        return tall is None or tall >= gui_height()
+        return tall is None or tall >= self.height
 
     def source_height(self, asset):
         """The shown image's height in pixels, or None when unknown."""
@@ -370,7 +371,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         h = self.source_height(asset)
         if h is None:
             return want
-        pixels = h / ((cover_size if cover else fit_size)(asset['ratio'])[1] * gui_height() / 1080.0)
+        pixels = h / ((cover_size if cover else fit_size)(asset['ratio'])[1] * self.height / 1080.0)
         return want if pixels < 1 else min(want, pixels)
 
     def span(self, control, ratio, scale=None):
