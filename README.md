@@ -44,7 +44,8 @@ library. During the slideshow:
 | Info | Caption, caption and photo details, or nothing |
 | Back | Close |
 
-Time per photo, crossfade, pan and zoom, shuffle and videos are in the
+Photos play oldest first; *Photo order* turns that around. Time per photo,
+crossfade, pan and zoom, shuffle and videos are also in the
 add-on settings. *Smooth zoom* stops fine detail such as sand or leaves from
 shimmering while photos zoom; it needs a Kodi build with mipmapped textures
 (the `mipmap` texture attribute) and looks worse without one.

@@ -114,6 +114,17 @@
           </dependencies>
           <control type="toggle"/>
         </setting>
+        <setting id="photo_order" type="integer" label="30220" help="30223">
+          <level>0</level>
+          <default>0</default>
+          <constraints>
+            <options>
+              <option label="30221">0</option>
+              <option label="30222">1</option>
+            </options>
+          </constraints>
+          <control type="list" format="string"/>
+        </setting>
         <setting id="shuffle" type="boolean" label="30209" help="">
           <level>0</level>
           <default>false</default>

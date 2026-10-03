@@ -224,6 +224,22 @@ msgctxt "#30219"
 msgid "Stops fine detail such as sand or leaves from shimmering while photos zoom. Needs a Kodi build that supports mipmapped textures; on other builds it looks worse, so leave it off."
 msgstr ""
 
+msgctxt "#30220"
+msgid "Photo order"
+msgstr ""
+
+msgctxt "#30221"
+msgid "Oldest first"
+msgstr ""
+
+msgctxt "#30222"
+msgid "Newest first"
+msgstr ""
+
+msgctxt "#30223"
+msgid "For months, years, albums, people, places, favourites and memories, in lists and slideshows. Search results stay best match first."
+msgstr ""
+
 msgctxt "#30300"
 msgid "Browsing"
 msgstr ""

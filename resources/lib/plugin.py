@@ -4,7 +4,7 @@ import json
 import os
 import random
 import traceback
-from datetime import date
+from datetime import date, datetime
 from urllib.parse import parse_qsl, urlencode
 
 import xbmc
@@ -131,7 +131,7 @@ class Probe:
 
 def today_memories(client):
     try:
-        return client.memories(date.today())
+        return in_order(client.memories(date.today()))
     except ApiError:                            # includes a key without memory.read
         return []
 
@@ -160,7 +160,8 @@ def timeline(client, year=None):
                    context=slideshow_menu(source='year', year=y), year=y)
     else:
         xbmcplugin.setPluginCategory(HANDLE, year)
-        months = [b for b in buckets if b['timeBucket'].startswith(year)]
+        months = sorted((b for b in buckets if b['timeBucket'].startswith(year)), key=lambda b: b['timeBucket'],
+                        reverse=newest_first())
         cover = covers(client, months, buckets)
         for b in months:
             name = '{} {}'.format(month_name(int(b['timeBucket'][5:7])), year)
@@ -179,9 +180,9 @@ def albums(client):
             art = {'thumb': client.thumb_url(a['albumThumbnailAssetId']),
                    'fanart': client.thumb_url(a['albumThumbnailAssetId'], 'preview')}
         name = a.get('albumName') or a['id']
-        source = {'source': 'album', 'album_id': a['id'], 'order': a.get('order')}
+        source = {'source': 'album', 'album_id': a['id']}
         folder(name, 'album', kodi.ICON, art=art, label2=count(a['assetCount']),
-               context=slideshow_menu(**source), album_id=a['id'], name=name, order=a.get('order'))
+               context=slideshow_menu(**source), album_id=a['id'], name=name)
     xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_NONE)
     xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_LABEL)
     end()
@@ -273,6 +274,19 @@ def page_size():
     return min(max(kodi.setting_int('page_size'), 100), 1000)   # Immich pages hold 1000 at most
 
 
+def newest_first():
+    return kodi.setting_int('photo_order') == 1
+
+
+def order():
+    return 'desc' if newest_first() else 'asc'
+
+
+def in_order(found):
+    """Memories, [(year, assets)]: years stay newest first, each day's photos in the chosen order."""
+    return [(y, sorted(assets, key=lambda a: a['taken'] or datetime.min, reverse=newest_first())) for y, assets in found]
+
+
 def list_assets(client, assets, source, category=None, more=None, play=True):
     """source: params that let the viewer fetch the same assets again; more: next page params."""
     xbmcplugin.setContent(HANDLE, 'images')
@@ -297,7 +311,7 @@ def list_assets(client, assets, source, category=None, more=None, play=True):
 
 def bucket(client, params):
     size, offset = page_size(), int(params.get('offset') or 0)
-    found = client.timeline_bucket(params['bucket'])
+    found = client.timeline_bucket(params['bucket'], order=order())
     more = None
     if offset + size < len(found):
         more = dict(params, offset=offset + size)
@@ -308,12 +322,12 @@ def bucket(client, params):
 def searched(client, params, source, **filters):
     """A page of /search/metadata results with a Next page entry."""
     page = int(params.get('page') or 1)          # a page number stays right if the page size changes
-    found, has_more = client.search_page(page, page_size(), params.get('order') or 'desc', **filters)
+    found, has_more = client.search_page(page, page_size(), order(), **filters)
     list_assets(client, found, source, params.get('name'), dict(params, page=page + 1) if has_more else None)
 
 
 def album(client, params):
-    source = {'source': 'album', 'album_id': params['album_id'], 'order': params.get('order')}
+    source = {'source': 'album', 'album_id': params['album_id']}
     searched(client, params, source, albumIds=[params['album_id']])
 
 
@@ -333,27 +347,27 @@ def place(client, params):
 def source_assets(client, params):
     kind = params.get('source')
     if kind == 'bucket':
-        return client.timeline_bucket(params['bucket'])
+        return client.timeline_bucket(params['bucket'], order=order())
     if kind == 'year':
         found = []
-        for b in client.timeline_buckets():
+        for b in sorted(client.timeline_buckets(), key=lambda b: b['timeBucket'], reverse=newest_first()):
             if b['timeBucket'].startswith(params['year']):
-                found += client.timeline_bucket(b['timeBucket'])
+                found += client.timeline_bucket(b['timeBucket'], order=order())
         return found
     if kind == 'album':
-        return client.search(order=params.get('order') or 'desc', albumIds=[params['album_id']])
+        return client.search(order=order(), albumIds=[params['album_id']])
     if kind == 'memories':
-        return [a for y, found in client.memories(date.today()) if not params.get('year') or str(y) == params['year']
-                for a in found]
+        return [a for y, found in in_order(client.memories(date.today()))
+                if not params.get('year') or str(y) == params['year'] for a in found]
     if kind == 'search':
         last = max(2, int(params.get('upto') or 1))    # reach the page a photo was picked from
         return [a for page in range(1, last + 1) for a in client.smart_page(params['query'], page, SEARCH_PAGE)[0]]
     if kind == 'favourites':
-        return client.search(isFavorite=True, visibility=TIMELINE)
+        return client.search(order(), isFavorite=True, visibility=TIMELINE)
     if kind == 'place':
-        return client.search(visibility=TIMELINE, **place_filters(params))
+        return client.search(order(), visibility=TIMELINE, **place_filters(params))
     if kind == 'person':
-        return client.search(personIds=[params['person_id']], visibility=TIMELINE)
+        return client.search(order(), personIds=[params['person_id']], visibility=TIMELINE)
     if kind == 'random':
         return client.random()
     return []
