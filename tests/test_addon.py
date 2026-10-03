@@ -89,6 +89,11 @@ import xbmcplugin
 
 from resources.lib import api, backdrop, kodi, plugin, proxy, service, signin, tiles, viewer
 
+try:
+    import PIL                                          # in Kodi's flatpak Python, not always on the host
+except ImportError:
+    PIL = None
+
 THUMBHASH = '1QcSHQRnh493V4dIh4eXh1h4kJUI'
 SCHEMES = {'immich': 'http://immich', 'immich:2283': 'http://immich:2283', 'photos.local': 'http://photos.local',
            'nas.lan:2283': 'http://nas.lan:2283', '192.168.1.5:2283': 'http://192.168.1.5:2283',
@@ -248,6 +253,7 @@ class Proxy(unittest.TestCase):
         with urlopen(f'{self.base}/api/assets/{self.asset}/thumbnail', timeout=10) as resp:
             self.assertEqual((resp.status, resp.read(8)), (200, b'\x89PNG\r\n\x1a\n'))
 
+    @unittest.skipUnless(PIL, 'needs PIL')
     def test_fanart_composed_to_fit(self):
         from PIL import Image
         tall = next(a['id'] for a in mock_immich.ASSETS if a['ratio'] < 1)
@@ -630,12 +636,6 @@ class KenBurns(NoProxy):
             spec = viewer.anim('zoom', start=100, end=110, time=1000, delay=300)[1]
         f = dict(p.split('=', 1) for p in spec.split() if '=' in p)
         self.assertEqual((f['time'], f['delay']), ('2000', '600'))
-
-
-try:
-    import PIL                                          # in Kodi's flatpak Python, not always on the host
-except ImportError:
-    PIL = None
 
 
 class Tiles(NoProxy):
