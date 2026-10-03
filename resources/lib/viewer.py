@@ -67,11 +67,6 @@ def cover_size(ratio):
     return (1920, 1920 / ratio) if ratio < SCREEN else (1080 * ratio, 1080)
 
 
-def fit_size(ratio):
-    """A photo fitted inside the screen, in skin pixels."""
-    return (1920, 1920 / ratio) if ratio > SCREEN else (1080 * ratio, 1080)
-
-
 def gui_height():
     """The interface height in real pixels; 1080 when Kodi doesn't say."""
     try:
@@ -333,8 +328,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         A resume zooms in from rest, gently, over a whole slide time, around where the photo already sits."""
         if self.pans(self.assets[self.index]):
             return self.pan(main, fade, resume, delay)
-        top = 100 * self.top(self.assets[self.index], cover=any(main is layer[2] for layer in self.layers))
-        start, end = (100, top) if resume or random.random() < 0.6 else (top, 100)
+        start, end = (100, self.zoom) if resume or random.random() < 0.6 else (self.zoom, 100)
         if resume and self.anchor:
             cx, cy = self.anchor                    # moving it now would jump
         else:
@@ -364,16 +358,6 @@ class Viewer(xbmcgui.WindowXMLDialog):
             h *= min(1.0, 1440.0 / min(w, h))
         return h
 
-    def top(self, asset, cover):
-        """The most this photo may zoom: the setting, but never past one original pixel per screen pixel.
-        One already shown larger than that, such as a preview on a 4K screen, zooms anyway rather than sit still."""
-        want = self.zoom / 100.0
-        h = self.source_height(asset)
-        if h is None:
-            return want
-        pixels = h / ((cover_size if cover else fit_size)(asset['ratio'])[1] * self.height / 1080.0)
-        return want if pixels < 1 else min(want, pixels)
-
     def span(self, control, ratio, scale=None):
         """The whole photo cropped to fill the screen, at the pan's largest: decoded that big, only ever shrunk."""
         scale = self.scale if scale is None else scale
@@ -391,7 +375,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         sign = random.choice((-1, 1))
         start = (0, 0) if resume else (-sign * dx, -sign * dy)
         self.kb = {'ctrl': main, 'pan': (start, (sign * dx, sign * dy)), 'center': '960,540',
-                   'top': self.top(self.assets[self.index], cover=True),
+                   'top': self.zoom / 100.0,
                    'f': 0.0, 'easing': 'inout' if resume else 'skew', 't0': time.time() + delay / 1000.0, 'time': ms,
                    'delay': delay}
         self.move()
