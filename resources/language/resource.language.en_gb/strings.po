@@ -296,6 +296,22 @@ msgctxt "#30408"
 msgid "Describe the photos to show, for example: beach at sunset"
 msgstr ""
 
+msgctxt "#30409"
+msgid "Choose albums"
+msgstr ""
+
+msgctxt "#30410"
+msgid "Pick one or more albums to show their photos in the screensaver"
+msgstr ""
+
+msgctxt "#30411"
+msgid "Chosen albums"
+msgstr ""
+
+msgctxt "#30412"
+msgid "Random album"
+msgstr ""
+
 # Messages 30600-30699
 
 msgctxt "#30601"
