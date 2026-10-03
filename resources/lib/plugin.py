@@ -59,7 +59,7 @@ def photo_art(client, asset_id):
     if not asset_id:
         return {}
     thumb = client.thumb_url(asset_id)
-    return {'thumb': thumb, 'icon': thumb, 'fanart': client.thumb_url(asset_id, 'preview')}
+    return {'thumb': thumb, 'icon': thumb, 'fanart': client.fanart_url(asset_id)}
 
 
 def covers(client, wanted, buckets):

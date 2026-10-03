@@ -1,4 +1,5 @@
 """Offline regression tests against the fake server; never the real one or the real Kodi settings."""
+import io
 import os
 import shutil
 import socket
@@ -11,6 +12,7 @@ from datetime import date
 from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest import mock
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -85,7 +87,7 @@ import xbmcaddon
 import xbmcgui
 import xbmcplugin
 
-from resources.lib import api, kodi, plugin, proxy, service, signin, tiles, viewer
+from resources.lib import api, backdrop, kodi, plugin, proxy, service, signin, tiles, viewer
 
 THUMBHASH = '1QcSHQRnh493V4dIh4eXh1h4kJUI'
 SCHEMES = {'immich': 'http://immich', 'immich:2283': 'http://immich:2283', 'photos.local': 'http://photos.local',
@@ -245,6 +247,19 @@ class Proxy(unittest.TestCase):
         self.assertEqual(self.server.upstream, (MOCK, mock_immich.KEY))
         with urlopen(f'{self.base}/api/assets/{self.asset}/thumbnail', timeout=10) as resp:
             self.assertEqual((resp.status, resp.read(8)), (200, b'\x89PNG\r\n\x1a\n'))
+
+    def test_fanart_composed_to_fit(self):
+        from PIL import Image
+        tall = next(a['id'] for a in mock_immich.ASSETS if a['ratio'] < 1)
+        with urlopen(f'{self.base}/fanart/{tall}', timeout=10) as resp:
+            self.assertEqual(resp.status, 200)
+            im = Image.open(io.BytesIO(resp.read()))
+        self.assertAlmostEqual(im.width / im.height, 16 / 9, places=2)
+        with urlopen(Request(f'{self.base}/fanart/{tall}', method='HEAD'), timeout=10) as resp:
+            self.assertEqual((resp.status, resp.read()), (200, b''))
+        with self.assertRaises(HTTPError) as got:
+            urlopen(f'{self.base}/fanart/not-an-id', timeout=10)
+        self.assertEqual(got.exception.code, 404)
 
     def done(self, since):
         entries = [e.rpartition('@') for e in xbmcgui.Window(10000).getProperty(proxy.DONE).split()]
@@ -868,7 +883,7 @@ class Covers(NoProxy):
         for y, art in years.items():
             first = next(a['id'] for a in self.client.timeline_bucket(newest[y]) if a['image'])
             self.assertIn('/assets/{}/thumbnail'.format(first), art['thumb'], y)
-            self.assertIn('size=preview', art['fanart'])
+            self.assertIn('/fanart/{}'.format(first), art['fanart'])
         year = max(years)
         months = self.listing(lambda: plugin.timeline(self.client, year))
         self.assertTrue(months)
@@ -903,6 +918,50 @@ class Covers(NoProxy):
             self.assertIn('/assets/', art['thumb'], name)
         cities = self.listing(lambda: plugin.places(self.client, 'Australia'))
         self.assertIn(countries['Australia']['thumb'], [a['thumb'] for a in cities.values()])
+
+
+def close(a, b):
+    """Pixels equal but for JPEG rounding."""
+    return max(abs(x - y) for x, y in zip(a, b)) <= 3
+
+
+@unittest.skipUnless(PIL, 'needs PIL')
+class Backdrop(unittest.TestCase):
+    def photo(self, w, h):
+        from PIL import Image
+        im = Image.new('RGB', (w, h), (200, 60, 60))
+        im.paste((20, 220, 20), (0, 0, w // 2, h // 2))                 # a sharp corner to find again
+        out = io.BytesIO(); im.save(out, 'PNG')
+        return im, out.getvalue()
+
+    def test_tall_photo_sits_whole_on_a_blurred_copy(self):
+        from PIL import Image
+        im, data = self.photo(600, 900)
+        out = Image.open(io.BytesIO(backdrop.compose(data)))
+        self.assertEqual(out.size, (1600, 900))                            # 16:9 at the photo's own height
+        self.assertEqual(close(out.getpixel((500 + 10, 10)), (20, 220, 20)), True)   # the photo, as it was, centred
+        self.assertEqual(close(out.getpixel((500 + 590, 890)), (200, 60, 60)), True)
+        edge = out.crop((0, 0, 400, 900)).convert('L')
+        self.assertLess(sum(edge.tobytes()) / (400 * 900), 100)           # the copy beside it is dimmed
+        self.assertGreater(edge.getextrema()[0], 0)                       # and is a picture, not black
+
+    def test_wide_panorama_gets_a_taller_canvas(self):
+        from PIL import Image
+        im, data = self.photo(1200, 300)
+        out = Image.open(io.BytesIO(backdrop.compose(data)))
+        self.assertEqual(out.size, (1200, 675))
+        self.assertEqual(close(out.getpixel((10, 187 + 10)), (20, 220, 20)), True)
+
+    def test_a_screen_shaped_photo_is_left_alone(self):
+        _, data = self.photo(1440, 810)
+        self.assertIs(backdrop.compose(data), data)
+        _, data = self.photo(1440, 1080)                                   # 4:3: too far from 16:9
+        self.assertIsNot(backdrop.compose(data), data)
+
+    def test_without_pil_the_photo_is_used(self):
+        _, data = self.photo(600, 900)
+        with mock.patch.dict(sys.modules, {'PIL': None}):
+            self.assertIs(backdrop.compose(data), data)
 
 
 class Loading(NoProxy):
