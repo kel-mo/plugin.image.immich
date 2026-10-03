@@ -10,7 +10,7 @@ across each photo.
 
 View only: the add-on never changes anything on the server.
 
-Needs Immich 2.0 or newer, and Kodi 20, 21 or 22.
+Needs Immich 2.0 or newer, and Kodi 22.
 
 ## Install
 
