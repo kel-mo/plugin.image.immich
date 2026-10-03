@@ -170,6 +170,8 @@
               <option label="30403">1</option>
               <option label="30404">2</option>
               <option label="30406">3</option>
+              <option label="30001">4</option>
+              <option label="30412">5</option>
             </options>
           </constraints>
           <control type="list" format="string"/>
@@ -186,6 +188,41 @@
           <control type="edit" format="string">
             <heading>30407</heading>
           </control>
+        </setting>
+        <setting id="screensaver_pick_albums" type="action" label="30409" help="30410">
+          <level>0</level>
+          <data>RunPlugin(plugin://plugin.image.immich/?action=screensaver_albums)</data>
+          <dependencies>
+            <dependency type="visible" setting="screensaver_source">4</dependency>
+          </dependencies>
+          <control type="button" format="action">
+            <close>true</close>
+          </control>
+        </setting>
+        <setting id="screensaver_album_names" type="string" label="30411" help="">
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <dependencies>
+            <dependency type="visible" setting="screensaver_source">4</dependency>
+          </dependencies>
+          <control type="edit" format="string">
+            <heading>30411</heading>
+          </control>
+          <enable>false</enable>
+        </setting>
+        <setting id="screensaver_albums" type="string" label="" help="">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="edit" format="string">
+            <heading></heading>
+          </control>
+          <visible>false</visible>
         </setting>
       </group>
     </category>

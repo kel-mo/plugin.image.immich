@@ -184,6 +184,24 @@ def albums(client):
     end()
 
 
+def screensaver_albums(client):
+    """Pick the screensaver's albums; their ids drive it, their names show in the settings."""
+    found = sorted((a for a in client.albums() if a.get('assetCount')), key=lambda a: (a.get('albumName') or '').lower())
+    chosen = set(kodi.setting('screensaver_albums').split(','))
+    names = [a.get('albumName') or a['id'] for a in found]
+    rows = []
+    for a, name in zip(found, names):
+        li = xbmcgui.ListItem(name, count(a['assetCount']), offscreen=True)
+        li.setArt(photo_art(client, a.get('albumThumbnailAssetId')) or {'thumb': kodi.ICON})
+        rows.append(li)
+    picked = xbmcgui.Dialog().multiselect(kodi.L(30409), rows, preselect=[i for i, a in enumerate(found) if a['id'] in chosen],
+                                          useDetails=True)
+    if picked is None:
+        return
+    kodi.set_setting('screensaver_albums', ','.join(found[i]['id'] for i in picked))
+    kodi.set_setting('screensaver_album_names', ', '.join(names[i] for i in picked))
+
+
 def people(client):
     found = client.people()
     found.sort(key=lambda p: (not p.get('name'), (p.get('name') or '').lower()))   # named first
@@ -435,6 +453,8 @@ def dispatch(action, params):
         albums(ImmichClient())
     elif action == 'album':
         album(ImmichClient(), params)
+    elif action == 'screensaver_albums':
+        screensaver_albums(ImmichClient())
     elif action == 'memories':
         memories(ImmichClient(), params.get('year'))
     elif action == 'today':                     # one flat row of today's memories, for home screen widgets

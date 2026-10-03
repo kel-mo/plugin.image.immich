@@ -1,10 +1,11 @@
 """Kodi stub: dialogs print, record in LOG and answer from ANSWERS."""
 NOTIFICATION_ERROR = 'error'; INPUT_ALPHANUM = 0; ALPHANUM_HIDE_INPUT = 2
-ANSWERS = {'select': [], 'yesno': [], 'input': []}
+ANSWERS = {'select': [], 'yesno': [], 'input': [], 'multiselect': []}
 LOG = []
 class Dialog:
     def notification(self, h, m, i=None, t=0): LOG.append(('notify', m)); print('NOTIFY', m)
     def select(self, h, items, preselect=-1, **kw): LOG.append(('select', h, items, preselect)); print('SELECT', h, items, 'pre', preselect); return ANSWERS['select'].pop(0) if ANSWERS['select'] else -1
+    def multiselect(self, h, items, preselect=None, **kw): LOG.append(('multiselect', h, items, preselect)); return ANSWERS['multiselect'].pop(0) if ANSWERS['multiselect'] else None
     def yesno(self, h, m, **kw): LOG.append(('yesno', m)); print('YESNO', m); return ANSWERS['yesno'].pop(0) if ANSWERS['yesno'] else False
     def textviewer(self, h, t, **kw): LOG.append(('text', t)); print('TEXT', t)
     def input(self, h, d='', **kw): return ANSWERS['input'].pop(0) if ANSWERS['input'] else ''

@@ -1200,15 +1200,18 @@ class Screensaver(NoProxy):
         self.assertEqual(points.get('xbmc.ui.screensaver'), 'screensaver.py')
         self.assertTrue(os.path.exists(os.path.join(ROOT, 'screensaver.py')))
 
-    def run_screensaver(self, source, found, query=''):
+    def run_screensaver(self, source, found, query='', albums=''):
         from resources.lib import screensaver
         shown, self.asked = [], []
 
         def source_assets(client, params):
             self.asked.append(params)
-            return found.get(params['source'], [])
+            if params['source'] == 'album' and params['album_id'] == 'gone':
+                raise api.ApiError('album not found')
+            return found.get(params.get('album_id') or params['source'], [])
         with mock.patch.object(kodi, 'setting_int', lambda k: source if k == 'screensaver_source' else 0), \
-                mock.patch.object(kodi, 'setting', lambda k: query if k == 'screensaver_query' else ''), \
+                mock.patch.object(kodi, 'setting', lambda k, setting=kodi.setting: {'screensaver_query': query,
+                                                                                    'screensaver_albums': albums}.get(k) or setting(k)), \
                 mock.patch.object(plugin, 'source_assets', source_assets), \
                 mock.patch.object(viewer, 'play', lambda client, assets, **kw: shown.append((assets, kw))):
             screensaver.run()
@@ -1236,6 +1239,36 @@ class Screensaver(NoProxy):
         shown = self.run_screensaver(3, {'search': [{'id': 's', 'image': True}], 'random': [{'id': 'r', 'image': True}]})
         (assets, _), = shown
         self.assertEqual([a['id'] for a in assets], ['r'])
+
+    def test_albums(self):
+        found = {'a1': [{'id': 'x', 'image': True}, {'id': 'y', 'image': True}], 'a2': [{'id': 'y', 'image': True}]}
+        shown = self.run_screensaver(4, found, albums='a1,gone,a2')
+        (assets, kw), = shown
+        self.assertEqual(sorted(a['id'] for a in assets), ['x', 'y'])
+        self.assertIsNone(kw.get('more'))
+
+    def test_no_albums_falls_back_to_random(self):
+        shown = self.run_screensaver(4, {'random': [{'id': 'r', 'image': True}]})
+        (assets, _), = shown
+        self.assertEqual([a['id'] for a in assets], ['r'])
+
+    def test_random_album(self):
+        found = {'album-1': [{'id': 'h', 'image': True}], 'album-2': [{'id': 'v', 'image': False}]}
+        for _ in range(4):
+            shown = self.run_screensaver(5, found)
+            (assets, _), = shown
+            self.assertEqual([a['id'] for a in assets], ['h'])     # skips videos-only and empty albums
+
+    def test_choose_albums(self):
+        xbmcgui.ANSWERS['multiselect'][:] = [[0, 1]]
+        with mock.patch.dict(xbmcaddon.SETTINGS, {'screensaver_albums': 'album-2'}):
+            plugin.screensaver_albums(api.ImmichClient())
+            _, _, rows, preselect = xbmcgui.LOG[-1]
+            self.assertEqual(([li.label for li in rows], preselect), (['Garden', 'Holidays'], [0]))
+            self.assertEqual((kodi.setting('screensaver_albums'), kodi.setting('screensaver_album_names')),
+                             ('album-2,album-1', 'Garden, Holidays'))
+            plugin.screensaver_albums(api.ImmichClient())   # cancelled
+            self.assertEqual(kodi.setting('screensaver_albums'), 'album-2,album-1')
 
     def test_viewer_as_screensaver(self):
         window = make_viewer([])
@@ -1363,8 +1396,10 @@ class Screensaver(NoProxy):
             po = f.read()
         query = next(s for s in ET.parse(os.path.join(ROOT, 'resources', 'settings.xml')).iter('setting')
                      if s.get('id') == 'screensaver_query')
-        self.assertEqual(len(labels), 4)
-        self.assertTrue(all(f'msgctxt "#{n}"' in po for n in labels + [setting.get('label'), query.get('label')]))
+        pick = [s.get('label') for s in ET.parse(os.path.join(ROOT, 'resources', 'settings.xml')).iter('setting')
+                if s.get('id') in ('screensaver_pick_albums', 'screensaver_album_names')]
+        self.assertEqual((len(labels), len(pick)), (6, 2))
+        self.assertTrue(all(f'msgctxt "#{n}"' in po for n in labels + pick + [setting.get('label'), query.get('label')]))
 
 
 class SignIn(unittest.TestCase):
