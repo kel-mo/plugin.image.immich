@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.image.immich" name="Immich" version="0.3.11" provider-name="kel-mo">
+<addon id="plugin.image.immich" name="Immich" version="0.3.12" provider-name="kel-mo">
   <requires>
     <import addon="xbmc.python" version="3.1.0"/>
   </requires>
@@ -16,7 +16,9 @@
     <license>GPL-2.0-or-later</license>
     <source>https://github.com/kel-mo/plugin.image.immich</source>
     <website>https://immich.app</website>
-    <news>v0.3.11
+    <news>v0.3.12
+- Playing a video can no longer freeze Kodi for a minute
+v0.3.11
 - Needs Kodi 22; a fanart for the add-on; debug lines only in Kodi's debug log
 v0.3.10
 - A thinner outline behind the slideshow caption, date and clock
