@@ -175,13 +175,9 @@ def albums(client):
     found = [a for a in client.albums() if a.get('assetCount')]
     found.sort(key=lambda a: a.get('endDate') or a.get('updatedAt') or '', reverse=True)
     for a in found:
-        art = {}
-        if a.get('albumThumbnailAssetId'):
-            art = {'thumb': client.thumb_url(a['albumThumbnailAssetId']),
-                   'fanart': client.thumb_url(a['albumThumbnailAssetId'], 'preview')}
         name = a.get('albumName') or a['id']
         source = {'source': 'album', 'album_id': a['id']}
-        folder(name, 'album', kodi.ICON, art=art, label2=count(a['assetCount']),
+        folder(name, 'album', kodi.ICON, art=photo_art(client, a.get('albumThumbnailAssetId')), label2=count(a['assetCount']),
                context=slideshow_menu(**source), album_id=a['id'], name=name)
     xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_NONE)
     xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_LABEL)
@@ -194,7 +190,7 @@ def people(client):
     for p in found:
         name = p.get('name') or kodi.L(30013)
         face = client.person_thumb_url(p['id'])
-        folder(name, 'person', art={'thumb': face, 'icon': face},
+        folder(name, 'person', art={'thumb': face, 'icon': face, 'fanart': client.person_fanart_url(p['id'])},
                context=slideshow_menu(source='person', person_id=p['id']), person_id=p['id'], name=name)
     xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_NONE)
     end()
