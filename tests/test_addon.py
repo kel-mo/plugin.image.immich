@@ -253,6 +253,30 @@ class Proxy(unittest.TestCase):
         with urlopen(f'{self.base}/api/assets/{self.asset}/thumbnail', timeout=10) as resp:
             self.assertEqual((resp.status, resp.read(8)), (200, b'\x89PNG\r\n\x1a\n'))
 
+    def test_stopping_cuts_a_relay_under_way(self):
+        import http.client
+        held, done = threading.Event(), threading.Event()
+
+        def stuck(handler):                             # a relay sat waiting on a socket, as at Kodi's exit
+            held.set()
+            try:
+                handler.connection.recv(1)
+            except OSError:
+                pass
+            done.set()
+        server = proxy.Server(52299)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        with mock.patch.object(proxy.Handler, 'relay', stuck):
+            conn = http.client.HTTPConnection('127.0.0.1', 52299, timeout=10)
+            conn.request('GET', '/api/assets/{}/thumbnail'.format(self.asset), headers={'Host': '127.0.0.1:52299'})
+            self.assertTrue(held.wait(5))
+            t = time.time()
+            proxy.stop(server)
+            self.assertTrue(done.wait(2))                                     # cut at once, not after a timeout
+            self.assertLess(time.time() - t, 2)
+            with self.assertRaises((http.client.HTTPException, OSError)):
+                conn.getresponse()
+
     @unittest.skipUnless(PIL, 'needs PIL')
     def test_fanart_composed_to_fit(self):
         from PIL import Image
@@ -1218,15 +1242,15 @@ class Screensaver(NoProxy):
             texts = [c for c in labels if c.findtext('textcolor') == 'DDFFFFFF']
             outlined += [c.findtext('label') for c in texts]
             for text in texts:
-                copies = labels[labels.index(text) - 28:labels.index(text)]    # halo and dark ring, drawn first
-                self.assertEqual({c.findtext('textcolor') for c in copies}, {'40000000', 'DD000000'})
+                copies = labels[labels.index(text) - 24:labels.index(text)]    # halo 3 px out and ring 1 px out, drawn first
+                self.assertEqual({c.findtext('textcolor') for c in copies}, {'34000000', 'C0000000'})
                 for c in copies:
                     for tag in ('label', 'visible', 'font', 'align', 'width', 'height'):
                         self.assertEqual(c.findtext(tag), text.findtext(tag))
                     self.assertEqual([a.attrib for a in c.findall('animation')], [a.attrib for a in text.findall('animation')])
                     for tag in ('left', 'right', 'top'):
                         if text.find(tag) is not None:
-                            self.assertLessEqual(abs(int(c.findtext(tag)) - int(text.findtext(tag))), 4)
+                            self.assertLessEqual(abs(int(c.findtext(tag)) - int(text.findtext(tag))), 3)
                 self.assertIsNone(text.find('shadowcolor'))
         for prop in ('immich.date', 'immich.place', 'immich.position', 'System.Time', 'immich.status'):
             self.assertTrue(any(prop in label for label in outlined), prop)

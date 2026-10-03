@@ -47,10 +47,22 @@ class Server(ThreadingHTTPServer):
         super().__init__(('127.0.0.1', port), Handler)
         self.hosts = {'127.0.0.1:{}'.format(port), 'localhost:{}'.format(port)}
         self.ssl_ctx = ssl.create_default_context()
+        self.open = set()                       # connections under way, cut when Kodi quits
+        self.open_lock = threading.Lock()
 
 
 class Handler(BaseHTTPRequestHandler):
-    timeout = 60
+    timeout = 5                              # a wait on Kodi's side this long means it has gone
+
+    def setup(self):
+        super().setup()
+        with self.server.open_lock:
+            self.server.open.add(self.connection)
+
+    def finish(self):
+        with self.server.open_lock:
+            self.server.open.discard(self.connection)
+        super().finish()
 
     def log_message(self, fmt, *args):
         kodi.debug('proxy: ' + fmt % args)
@@ -155,9 +167,16 @@ def start():
 
 
 def stop(server):
+    """Right away: relays under way are cut, so no thread of ours outlives Kodi's wait."""
     xbmcgui.Window(10000).clearProperty(PROPERTY)
     server.shutdown()
     server.server_close()
+    with server.open_lock:
+        for conn in list(server.open):
+            try:
+                conn.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
 
 
 def forget_cached(url):
