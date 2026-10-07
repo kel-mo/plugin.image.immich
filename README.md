@@ -4,7 +4,8 @@
 
 View the photos and videos of your self-hosted [Immich](https://immich.app)
 server on Kodi. Browse *On this day*, the timeline, people and pets, places,
-albums and favourites, or search by description ("beach at sunset"). Or sit
+albums and favourites, the timelines partners share with you, or search by
+description ("beach at sunset"). Or sit
 back and watch them as a slideshow that crossfades and slowly pans and zooms
 across each photo.
 
@@ -25,8 +26,9 @@ Needs Immich 2.0 or newer, and Kodi 22.
 
 1. In Immich, open *Account settings → API keys* and create a key. It needs
    at least `asset.read`, `asset.view`, `album.read` and `user.read`. Add
-   `person.read` for people, `memory.read` for *On this day* and
-   `asset.download` for full resolution photos.
+   `person.read` for people, `memory.read` for *On this day*,
+   `partner.read` for *Partners* and `asset.download` for full resolution
+   photos.
 2. Open Immich under *Pictures* in Kodi and choose *Sign in*, or open the
    add-on settings.
 3. Enter your server address and the API key.

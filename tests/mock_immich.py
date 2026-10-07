@@ -116,6 +116,9 @@ def png(a, long_side):
             + chunk(b'IDAT', zlib.compress(b''.join(rows), 6)) + chunk(b'IEND', b''))
 
 
+PARTNER = {'id': 'u2', 'name': 'Partner', 'email': 'partner@example.com', 'inTimeline': False}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         sys.stderr.write('mock: ' + fmt % args + '\n')
@@ -144,8 +147,14 @@ class Handler(BaseHTTPRequestHandler):
             items = next((al['members'] for al in ALBUMS if al['id'] == q['albumId']), [])
         if q.get('isFavorite') == 'true':
             items = [a for a in items if a['n'] % 5 == 0]
+        if q.get('userId') == PARTNER['id']:
+            items = [a for a in items if a['n'] % 3 == 0]
+        elif q.get('userId'):
+            return self.send(400, {'message': 'Not found or no timeline.read access'})
         if p == '/api/users/me':
             return self.send(200, {'id': 'u1', 'name': 'Kodi Tester', 'email': 'kodi@example.com'})
+        if p == '/api/partners':
+            return self.send(200, [PARTNER] if q.get('direction') == 'shared-with' else [])
         if p == '/api/api-keys/me':
             return self.send(200, {'id': 'k1', 'name': 'test', 'permissions': ['all']})
         if p == '/api/timeline/buckets':

@@ -114,6 +114,10 @@ msgctxt "#30026"
 msgid "Shuffle"
 msgstr ""
 
+msgctxt "#30027"
+msgid "Partners"
+msgstr ""
+
 # Settings 30100-30599
 
 msgctxt "#30100"

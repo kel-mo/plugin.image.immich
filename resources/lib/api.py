@@ -162,6 +162,10 @@ class ImmichClient:
     def albums(self):
         return self.get('/albums') or []
 
+    def partners(self):
+        """People who share their library with this account."""
+        return self.get('/partners', direction='shared-with') or []
+
     def has_people(self):
         res = self.get('/people', page=1, size=1, withHidden='false') or {}
         return bool(res.get('people') or res.get('total'))

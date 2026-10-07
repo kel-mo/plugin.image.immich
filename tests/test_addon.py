@@ -969,6 +969,55 @@ def close(a, b):
     return max(abs(x - y) for x, y in zip(a, b)) <= 3
 
 
+class Partners(NoProxy):
+    """People who share their library: their own timeline, apart from yours."""
+
+    def setUp(self):
+        super().setUp()
+        self.client = api.ImmichClient()
+
+    def listing(self, call):
+        del xbmcplugin.ITEMS[:]
+        call()
+        return [(li.label, url) for url, li, _ in xbmcplugin.ITEMS]
+
+    def test_menu_offers_partners_when_someone_shares(self):
+        with mock.patch.object(signin, 'is_signed_in', lambda: True), mock.patch.object(signin, 'check', lambda: True):
+            urls = [u for _, u in self.listing(plugin.root)]
+        self.assertTrue(any(u.endswith('action=partners') for u in urls))
+
+    def test_no_partners_entry_without_one(self):
+        with mock.patch.object(signin, 'is_signed_in', lambda: True), mock.patch.object(signin, 'check', lambda: True), \
+                mock.patch.object(api.ImmichClient, 'partners', lambda self: []):
+            urls = [u for _, u in self.listing(plugin.root)]
+        self.assertFalse(any(u.endswith('action=partners') for u in urls))
+
+    def test_partner_opens_their_timeline(self):
+        found = self.listing(lambda: plugin.partners(self.client))
+        self.assertEqual([label for label, _ in found], [mock_immich.PARTNER['name']])
+        self.assertIn('user_id=' + mock_immich.PARTNER['id'], found[0][1])
+
+    def test_partner_years_months_and_photos_are_theirs(self):
+        uid = mock_immich.PARTNER['id']
+        theirs = {a['id'] for a in mock_immich.ASSETS if a['n'] % 3 == 0}
+        years = self.listing(lambda: plugin.timeline(self.client, user_id=uid))
+        self.assertTrue(years and all('user_id=' + uid in u for _, u in years))
+        year = years[0][0]
+        months = self.listing(lambda: plugin.timeline(self.client, year, user_id=uid))
+        self.assertTrue(months and all('user_id=' + uid in u for _, u in months))
+        bucket = dict(parse_qsl(months[0][1].split('?', 1)[1]))['bucket']
+        shown = plugin.source_assets(self.client, {'source': 'bucket', 'bucket': bucket, 'user_id': uid})
+        self.assertTrue(shown and {a['id'] for a in shown} <= theirs)
+        mine = plugin.source_assets(self.client, {'source': 'bucket', 'bucket': bucket})
+        self.assertGreater(len(mine), len(shown))
+
+    def test_covers_kept_apart_per_user(self):
+        uid = mock_immich.PARTNER['id']
+        plugin.timeline(self.client)
+        plugin.timeline(self.client, user_id=uid)
+        self.assertTrue(os.path.exists(os.path.join(kodi.PROFILE, 'covers-{}.json'.format(uid))))
+
+
 class PhotoOrder(NoProxy):
     """Photos run oldest first unless the setting says newest first; search stays best match first."""
 

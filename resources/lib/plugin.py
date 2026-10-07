@@ -62,16 +62,23 @@ def photo_art(client, asset_id):
     return {'thumb': thumb, 'icon': thumb, 'fanart': client.fanart_url(asset_id)}
 
 
-def covers(client, wanted, buckets):
+def owner(params):
+    """Timeline filters for a partner's library; none for your own."""
+    return {'userId': params['user_id']} if params.get('user_id') else {}
+
+
+def covers(client, wanted, buckets, user_id=None):
     """A photo for each wanted timeline bucket, its newest: kept in a cache keyed on the bucket's count,
-    so a listing fetches only buckets that have changed; buckets gone from the timeline are dropped."""
-    path = os.path.join(kodi.PROFILE, 'covers.json')
+    so a listing fetches only buckets that have changed; buckets gone from the timeline are dropped.
+    A partner's buckets have a cache of their own, as the same months hold other photos."""
+    path = os.path.join(kodi.PROFILE, 'covers-{}.json'.format(user_id) if user_id else 'covers.json')
     known = kodi.read_json(path, {})
     found, fetched = {}, False
     for b in wanted:
         key = b['timeBucket']
         if not known.get(key) or known[key][0] != b['count']:
-            known[key] = [b['count'], next((a['id'] for a in client.timeline_bucket(key) if a.get('image')), None)]
+            known[key] = [b['count'], next((a['id'] for a in client.timeline_bucket(key, **owner({'user_id': user_id}))
+                                            if a.get('image')), None)]
             fetched = True
         found[key] = known[key][1]
     if fetched:
@@ -94,6 +101,8 @@ def root():
     folder(kodi.L(30000), 'timeline', tiles.art('timeline'))
     client = ImmichClient(timeout=PROBE_TIMEOUT)
     probe = Probe()
+    if probe(lambda: client.partners(), [], []):
+        folder(kodi.L(30027), 'partners', tiles.art('timeline'))
     memories = probe(lambda: client.memories(date.today()), [], [])
     if memories:
         folder(kodi.L(30017), 'memories', tiles.art('memories'), label2=count(sum(len(m[1]) for m in memories)),
@@ -145,8 +154,16 @@ def slideshow_menu(**source):
             (kodi.L(30005), run_plugin('play', shuffle='1', **source))]
 
 
-def timeline(client, year=None):
-    buckets = client.timeline_buckets()
+def partners(client):
+    for p in client.partners():
+        name = p.get('name') or p.get('email') or p['id']
+        folder(name, 'timeline', kodi.ICON, user_id=p['id'], name=name)   # no shuffle: /search/random is yours only
+    end()
+
+
+def timeline(client, year=None, user_id=None):
+    mine = owner({'user_id': user_id})
+    buckets = client.timeline_buckets(**mine)
     if not year:
         years, newest = {}, {}
         for b in buckets:
@@ -154,20 +171,20 @@ def timeline(client, year=None):
             years[y] = years.get(y, 0) + b['count']
             if y not in newest or b['timeBucket'] > newest[y]['timeBucket']:
                 newest[y] = b
-        cover = covers(client, newest.values(), buckets)
+        cover = covers(client, newest.values(), buckets, user_id)
         for y in sorted(years, reverse=True):
             folder(y, 'timeline', kodi.ICON, art=photo_art(client, cover[newest[y]['timeBucket']]), label2=count(years[y]),
-                   context=slideshow_menu(source='year', year=y), year=y)
+                   context=slideshow_menu(source='year', year=y, user_id=user_id), year=y, user_id=user_id)
     else:
         xbmcplugin.setPluginCategory(HANDLE, year)
         months = sorted((b for b in buckets if b['timeBucket'].startswith(year)), key=lambda b: b['timeBucket'],
                         reverse=newest_first())
-        cover = covers(client, months, buckets)
+        cover = covers(client, months, buckets, user_id)
         for b in months:
             name = '{} {}'.format(month_name(int(b['timeBucket'][5:7])), year)
             folder(name, 'bucket', kodi.ICON, art=photo_art(client, cover[b['timeBucket']]), label2=count(b['count']),
-                   context=slideshow_menu(source='bucket', bucket=b['timeBucket']),
-                   bucket=b['timeBucket'], name=name)
+                   context=slideshow_menu(source='bucket', bucket=b['timeBucket'], user_id=user_id),
+                   bucket=b['timeBucket'], name=name, user_id=user_id)
     end()
 
 
@@ -325,12 +342,12 @@ def list_assets(client, assets, source, category=None, more=None, play=True):
 
 def bucket(client, params):
     size, offset = page_size(), int(params.get('offset') or 0)
-    found = client.timeline_bucket(params['bucket'], order=order())
+    found = client.timeline_bucket(params['bucket'], order=order(), **owner(params))
     more = None
     if offset + size < len(found):
         more = dict(params, offset=offset + size)
-    list_assets(client, found[offset:offset + size], {'source': 'bucket', 'bucket': params['bucket']},
-                params.get('name'), more)
+    list_assets(client, found[offset:offset + size],
+                {'source': 'bucket', 'bucket': params['bucket'], 'user_id': params.get('user_id')}, params.get('name'), more)
 
 
 def searched(client, params, source, **filters):
@@ -361,12 +378,12 @@ def place(client, params):
 def source_assets(client, params):
     kind = params.get('source')
     if kind == 'bucket':
-        return client.timeline_bucket(params['bucket'], order=order())
+        return client.timeline_bucket(params['bucket'], order=order(), **owner(params))
     if kind == 'year':
         found = []
-        for b in sorted(client.timeline_buckets(), key=lambda b: b['timeBucket'], reverse=newest_first()):
+        for b in sorted(client.timeline_buckets(**owner(params)), key=lambda b: b['timeBucket'], reverse=newest_first()):
             if b['timeBucket'].startswith(params['year']):
-                found += client.timeline_bucket(b['timeBucket'], order=order())
+                found += client.timeline_bucket(b['timeBucket'], order=order(), **owner(params))
         return found
     if kind == 'album':
         return client.search(order=order(), albumIds=[params['album_id']])
@@ -446,7 +463,9 @@ def dispatch(action, params):
         kodi.error(kodi.L(30615))
         end(False)
     elif action == 'timeline':
-        timeline(ImmichClient(), params.get('year'))
+        timeline(ImmichClient(), params.get('year'), params.get('user_id'))
+    elif action == 'partners':
+        partners(ImmichClient())
     elif action == 'bucket':
         bucket(ImmichClient(), params)
     elif action == 'albums':
