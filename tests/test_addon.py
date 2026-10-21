@@ -1119,11 +1119,17 @@ class Loading(NoProxy):
     def test_details_fetched_ahead(self):
         window = self.viewer()
         for a in window.assets:
-            a['mime'] = a['orientation'] = None     # as memories and timeline months come
+            a['mime'] = None                        # as memories and timeline months come
         window.display(0)
         if window.ahead:
             window.ahead.join(10)
         self.assertEqual({a['id'] for a in window.assets[1:4]} - set(window.raws), set())
+
+    def test_only_avif_originals_fall_back(self):
+        window = self.viewer()
+        jpeg = dict(window.assets[1], image=True, mime='image/jpeg')     # rotated ones too: Kodi turns them upright
+        avif = dict(window.assets[2], image=True, mime='image/avif')
+        self.assertEqual((window.photo_size(jpeg), window.photo_size(avif)), ('fullsize', 'preview'))
 
 
 class TextureCache(NoProxy):

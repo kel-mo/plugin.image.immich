@@ -39,7 +39,6 @@ CORNERS = (('', ''), ('top', ''), ('top', 'right'), ('', 'right'))   # the date'
 STOP = 'PlayerControl(Stop)'
 PLAY_PAUSE = 'PlayerControl(Play)'
 UNDECODABLE = {'image/avif'}             # originals LibreELEC's Kodi can't show over http
-UPRIGHT = {'0', '1'}                     # others: newer FFmpeg leaves Kodi showing originals unrotated
 ASSET_ID = re.compile(r'[0-9a-f-]+')     # safe in a file name
 
 
@@ -260,25 +259,24 @@ class Viewer(xbmcgui.WindowXMLDialog):
         if self.size != 'fullsize' or (self.ahead and self.ahead.is_alive()):
             return
         todo = [a for a in (self.assets[(self.index + k) % len(self.assets)] for k in range(1, AHEAD + 1))
-                if a['image'] and a['id'] not in self.raws and (a.get('mime') is None or a.get('orientation') is None)]
+                if a['image'] and a['id'] not in self.raws and a.get('mime') is None]
         if todo:
             self.ahead = threading.Thread(target=lambda: [self.raw(a) for a in todo], daemon=True)
             self.ahead.start()
 
     def photo_size(self, asset):
-        """fullsize redirects to web-safe originals; Kodi may not decode AVIF ones or turn rotated ones upright."""
+        """fullsize redirects to web-safe originals, and Kodi may not decode AVIF ones."""
         if self.size != 'fullsize' or not asset['image']:
             return 'preview'
-        if asset.get('mime') is None or asset.get('orientation') is None:   # timeline months carry neither
+        if asset.get('mime') is None:               # timeline months don't carry the file type
             raw = self.raw(asset)
             if raw is None:
                 return 'preview'
             asset['mime'] = raw.get('originalMimeType') or ''
-            asset['orientation'] = str((raw.get('exifInfo') or {}).get('orientation') or 1)
             if not asset.get('height'):
                 shaped = from_asset(raw)
                 asset['width'], asset['height'] = shaped['width'], shaped['height']
-        return 'fullsize' if asset['mime'] not in UNDECODABLE and asset['orientation'] in UPRIGHT else 'preview'
+        return 'preview' if asset['mime'] in UNDECODABLE else 'fullsize'
 
     def display(self, index, fade=None):
         if self.more and index >= len(self.assets) - 3:
