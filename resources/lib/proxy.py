@@ -195,14 +195,6 @@ def stop(server):
                 pass
 
 
-def forget_cached(url):
-    """Drop Kodi's cached copy of an image, so it loads in full through the proxy again."""
-    found = kodi.jsonrpc('Textures.GetTextures', properties=['url'],
-                         filter={'field': 'url', 'operator': 'is', 'value': url})
-    for t in (found or {}).get('textures') or []:
-        kodi.jsonrpc('Textures.RemoveTexture', textureid=t['textureid'])
-
-
 def forget_cached_photos():
     """Drop slideshow originals cached by earlier runs; Kodi keeps them at a fraction of their size."""
     found = kodi.jsonrpc('Textures.GetTextures', properties=['url'],

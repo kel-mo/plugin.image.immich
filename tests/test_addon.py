@@ -1133,7 +1133,7 @@ class Loading(NoProxy):
 
 
 class TextureCache(NoProxy):
-    """Kodi 22 caches photos at 720p even with setImage(url, False); the viewer drops those copies first."""
+    """Photos load with setImage(url, False), so Kodi keeps no cached copy to drop."""
     def fake(self, textures):
         calls = []
 
@@ -1146,7 +1146,7 @@ class TextureCache(NoProxy):
             return 'OK'
         return calls, jsonrpc
 
-    def test_cached_copy_dropped_before_showing(self):
+    def test_photo_skips_the_cache(self):
         window = make_viewer(api.ImmichClient().search_page(size=2)[0])
         log = []
 
@@ -1158,13 +1158,11 @@ class TextureCache(NoProxy):
         with mock.patch.object(kodi, 'setting_bool', lambda k: False):
             window.setup()
         url = window.client.thumb_url(window.assets[0]['id'], 'preview')
-        calls, jsonrpc = self.fake([{'textureid': 7, 'url': url}, {'textureid': 8, 'url': url + 'x'}])
-        with mock.patch.object(kodi, 'jsonrpc', side_effect=lambda m, **p: (log.append(m), jsonrpc(m, **p))[1]):
+        calls, jsonrpc = self.fake([{'textureid': 7, 'url': url}])
+        with mock.patch.object(kodi, 'jsonrpc', side_effect=jsonrpc):
             window.prepare(0, 0)
-        self.assertIn(('Textures.RemoveTexture', {'textureid': 7}), calls)
-        self.assertNotIn(('Textures.RemoveTexture', {'textureid': 8}), calls)
-        shown = [i for i, e in enumerate(log) if e == ('setImage', url, False)]
-        self.assertTrue(shown and log.index('Textures.RemoveTexture') < shown[0])
+        self.assertIn(('setImage', url, False), log)
+        self.assertEqual(calls, [])
 
     def test_service_start_drops_cached_originals(self):
         base = 'http://127.0.0.1:52283/api/assets/{}/thumbnail?size={}'

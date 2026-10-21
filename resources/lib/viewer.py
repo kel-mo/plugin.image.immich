@@ -177,7 +177,6 @@ class Viewer(xbmcgui.WindowXMLDialog):
         group.setAnimations([anim('fade', start=0, end=0, time=0)])   # may still be fading out
         size = asset['shown_size'] = self.photo_size(asset)
         url = self.client.thumb_url(asset['id'], size)
-        proxy.forget_cached(url)                    # Kodi 22 caches it anyway, at 720p
         for control in (back, cover, fit):          # Kodi shows the old texture until the new one loads
             control.setImage('')
         pan = self.pans(asset)
@@ -456,7 +455,6 @@ class Viewer(xbmcgui.WindowXMLDialog):
         else:
             self.outsize(ctrl, scale=1.0)
         url = self.client.thumb_url(asset['id'], asset['shown_size'])
-        proxy.forget_cached(url)
         ctrl.setImage(url, False)
         self.still = {'ctrl': ctrl, 'name': '{}:{}'.format(asset['id'], asset['shown_size']), 'since': time.time(),
                       'arrived': None, 'shown': False}
