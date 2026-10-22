@@ -3,6 +3,7 @@ import io
 import os
 import shutil
 import socket
+import struct
 import sys
 import tempfile
 import threading
@@ -88,7 +89,7 @@ import xbmcaddon
 import xbmcgui
 import xbmcplugin
 
-from resources.lib import api, backdrop, kodi, plugin, proxy, service, signin, tiles, viewer
+from resources.lib import api, backdrop, items, kodi, plugin, proxy, service, signin, tiles, viewer
 
 try:
     import PIL                                          # in Kodi's flatpak Python, not always on the host
@@ -165,6 +166,17 @@ class Music(xbmc.Player):
 class Video(Music):
     def isPlayingVideo(self):
         return True
+
+
+class Clip(Video):
+    def __init__(self, position, length):
+        self.position, self.length = position, length
+
+    def getTime(self):
+        return self.position
+
+    def getTotalTime(self):
+        return self.length
 
 
 class CutOff:
@@ -304,6 +316,22 @@ class Proxy(unittest.TestCase):
             urlopen(f'{self.base}/fanart/person/0000', timeout=10)          # nobody, so no photo
         self.assertEqual(got.exception.code, 502)
 
+    def test_clip_slowed_and_served_in_ranges(self):
+        url = f'{self.base}/clip/{self.asset}'
+        slowed = proxy.retime(mock_immich.clip_mp4(), proxy.CLIP_SPEED)
+        with urlopen(url, timeout=10) as resp:
+            self.assertEqual((resp.status, resp.headers['Content-Type'], resp.read()), (200, 'video/mp4', slowed))
+        with urlopen(Request(url, headers={'Range': 'bytes=10-19'}), timeout=10) as resp:
+            self.assertEqual((resp.status, resp.headers['Content-Range'], resp.read()),
+                             (206, f'bytes 10-19/{len(slowed)}', slowed[10:20]))
+        with urlopen(Request(url, headers={'Range': f'bytes={len(slowed) - 4}-'}), timeout=10) as resp:
+            self.assertEqual(resp.read(), slowed[-4:])
+        with urlopen(Request(url, method='HEAD'), timeout=10) as resp:
+            self.assertEqual((resp.headers['Content-Length'], resp.read()), (str(len(slowed)), b''))
+        with self.assertRaises(HTTPError) as got:
+            urlopen(Request(url, headers={'Range': f'bytes={len(slowed)}-'}), timeout=10)
+        self.assertEqual(got.exception.code, 416)
+
     def done(self, since):
         entries = [e.rpartition('@') for e in xbmcgui.Window(10000).getProperty(proxy.DONE).split()]
         return [name for name, _, at in entries if float(at) >= since]
@@ -344,6 +372,34 @@ class Proxy(unittest.TestCase):
                 resp.read()
             time.sleep(0.2)
         self.assertEqual(errors, [])
+
+
+class Retime(unittest.TestCase):
+    def field(self, data, kind, offset, nth=0):
+        at = -1
+        for _ in range(nth + 1):
+            at = data.index(kind, at + 1)
+        return struct.unpack_from('>I', data, at + 4 + offset)[0]
+
+    def test_clocks_slowed_samples_kept(self):
+        slowed = proxy.retime(mock_immich.clip_mp4(), 0.5)
+        self.assertEqual(len(slowed), len(mock_immich.clip_mp4()))
+        self.assertEqual([self.field(slowed, b'mvhd', 16), self.field(slowed, b'tkhd', 20),
+                          self.field(slowed, b'elst', 8)], [3600, 3600, 3600])       # 1.8 s movie, now 3.6
+        self.assertEqual((self.field(slowed, b'mdhd', 12), self.field(slowed, b'mdhd', 16)), (7680, 27648))
+
+    def test_every_track_slowed(self):
+        slowed = proxy.retime(mock_immich.clip_mp4((b'vide', b'meta')), 0.5)
+        self.assertEqual([self.field(slowed, b'mdhd', 12, n) for n in (0, 1)], [7680, 7680])
+
+    def test_left_alone_when_unsafe(self):
+        for data in (mock_immich.clip_mp4((b'vide', b'soun')),      # sound would drift
+                     mock_immich.clip_mp4(fragmented=True),
+                     mock_immich.clip_mp4((b'meta',)),
+                     mock_immich.clip_mp4()[:100],                   # cut off inside the moov
+                     b'not an mp4'):
+            with self.subTest(data=data[:24]):
+                self.assertIsNone(proxy.retime(data, 0.5))
 
 
 class Slideshow(NoProxy):
@@ -1130,6 +1186,80 @@ class Loading(NoProxy):
         jpeg = dict(window.assets[1], image=True, mime='image/jpeg')     # rotated ones too: Kodi turns them upright
         avif = dict(window.assets[2], image=True, mime='image/avif')
         self.assertEqual((window.photo_size(jpeg), window.photo_size(avif)), ('fullsize', 'preview'))
+
+
+class MovingPhotos(NoProxy):
+    """A photo stepped to by hand plays its Immich clip once; a running slideshow shows stills."""
+    def viewer(self, playing=False):
+        assets = api.ImmichClient().search_page(size=2)[0]
+        for a in assets:
+            a['image'] = True
+        assets[0]['live'] = 'clip-0'
+        window = make_viewer(assets)
+        window.playing = playing
+        window.getControl = lambda i: Recorder()
+        with mock.patch.object(kodi, 'setting_bool', lambda k: False):
+            window.setup()
+            window.display(0)
+        return window
+
+    def test_stepped_to_photo_plays_its_clip(self):
+        window = self.viewer()
+        self.assertEqual((window.video['id'], window.video['at']), ('clip-0', window.preload_at))
+        window.display(1)
+        self.assertIsNone(window.video)                     # a still photo stays still
+
+    def test_slideshow_shows_stills(self):
+        self.assertIsNone(self.viewer(playing=True).video)
+
+    def test_clip_plays_slowed_through_the_proxy(self):
+        window = self.viewer()
+        played = []
+        window.player.play = lambda url, li: played.append(url)
+        window.play_video()
+        self.assertEqual(played, [items.video_path('clip-0', 'clip')])
+
+    def test_clip_shows_once_a_frame_is_up_then_leaves_the_photo(self):
+        window = self.viewer()
+        shown = []
+        window.display = lambda *a, **k: shown.append(a)
+        window.play_video()
+        window.player = Clip(0.0, 3.0)                      # opened, no frame yet
+        window.poll_video()
+        self.assertEqual((window.getProperty('immich.video'), window.video_window.calls[-1][0]), ('', 'setHeight'))
+        window.player = Clip(0.04, 3.0)
+        window.poll_video()
+        self.assertEqual(window.getProperty('immich.video'), 'true')
+        (fade,) = window.video_window.last()
+        self.assertEqual((fade['effect'], fade['start'], fade['end']), ('fade', '0', '100'))
+        window.player = xbmc.Player()                       # the clip has ended
+        window.poll_video()
+        self.assertEqual((window.video, shown, window.getProperty('immich.status')), (None, [], kodi.L(30700)))
+
+    def test_clip_fades_back_to_the_photo_before_it_ends(self):
+        window = self.viewer()
+        window.play_video()
+        window.player = Clip(0.5, 3.0)
+        window.poll_video()
+        window.player = Clip(2.7, 3.0)
+        window.poll_video()
+        (fade,) = window.video_window.last()
+        self.assertEqual((fade['start'], fade['end']), ('100', '0'))
+
+    def test_clip_sits_over_its_photo(self):
+        window = self.viewer()
+        window.assets[0]['ratio'] = 0.75                    # a portrait photo, fitted on its backdrop
+        window.main = window.layers[window.shown][3]
+        window.play_video()
+        self.assertEqual(window.video_window.calls[-3:], [('setPosition', 555, 0), ('setWidth', 810), ('setHeight', 1080)])
+
+    def test_play_stops_the_clip_and_resumes(self):
+        window = self.viewer()
+        window.video['at'] = None                           # started
+        window.player = Video()
+        xbmc.BUILTINS.clear()
+        window.handle(12)
+        self.assertEqual((window.video, window.playing, xbmc.BUILTINS), (None, True, [viewer.STOP]))
 
 
 class TextureCache(NoProxy):

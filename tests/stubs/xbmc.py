@@ -14,6 +14,8 @@ def getLocalizedString(i): return {21: 'January', 29: 'September', 28: 'August'}
 class Player:
     def isPlaying(self): return False
     def isPlayingVideo(self): return False
+    def getTime(self): raise RuntimeError('Kodi is not playing any media file')
+    def getTotalTime(self): raise RuntimeError('Kodi is not playing any media file')
     def play(self, *a, **k): pass
     def stop(self): pass
 def getSkinDir(): return 'skin.estuary'

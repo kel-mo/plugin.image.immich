@@ -387,8 +387,8 @@ def source_assets(client, params):
     return []
 
 
-def video(client, asset_id):
-    li = xbmcgui.ListItem(path=client.video_url(asset_id), offscreen=True)
+def video(client, asset_id, clip=False):
+    li = xbmcgui.ListItem(path=client.clip_url(asset_id) if clip else client.video_url(asset_id), offscreen=True)
     li.setMimeType('video/mp4')
     li.setContentLookup(False)
     xbmcplugin.setResolvedUrl(HANDLE, True, li)
@@ -480,8 +480,8 @@ def dispatch(action, params):
         person(ImmichClient(), params)
     elif action == 'play':
         play(ImmichClient(), params)
-    elif action == 'video':
-        video(ImmichClient(), params['id'])
+    elif action in ('video', 'clip'):
+        video(ImmichClient(), params['id'], clip=action == 'clip')
     else:
         kodi.log('unknown action {}'.format(action), xbmc.LOGWARNING)
         end(False)

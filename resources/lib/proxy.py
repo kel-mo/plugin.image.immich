@@ -6,8 +6,10 @@ import os
 import re
 import socket
 import ssl
+import struct
 import threading
 import time
+from collections import OrderedDict
 from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError, URLError
@@ -29,6 +31,11 @@ CHUNK = 64 * 1024
 _done_lock = threading.Lock()
 PORTRAITS = 50                           # recent photos a person's fanart is picked from
 FANART = re.compile(r'/fanart/(person/)?([0-9a-f-]+)$')     # a preview composed to 16:9, see backdrop.py
+CLIP = re.compile(r'/clip/([0-9a-f-]+)$')         # a moving photo's clip, slowed down, see retime()
+CLIP_SPEED = 0.6                         # moving photos' clips last a second or two, too quick to follow
+CLIP_MAX = 64 * 1024 * 1024
+CLIPS_KEPT = 2                           # Kodi reads a clip in several ranges
+RANGE = re.compile(r'bytes=(\d*)-(\d*)$')
 ALLOWED = re.compile(r'/api/(assets/[0-9a-f-]+/(thumbnail|original|video/playback)|people/[0-9a-f-]+/thumbnail)$')
 REQUEST_HEADERS = ('Range', 'If-None-Match', 'If-Modified-Since')
 RESPONSE_HEADERS = ('Content-Type', 'Content-Length', 'Content-Range', 'Accept-Ranges', 'Cache-Control', 'ETag',
@@ -51,6 +58,8 @@ class Server(ThreadingHTTPServer):
         self.ssl_ctx = ssl.create_default_context()
         self.open = set()                       # connections under way, cut when Kodi quits
         self.open_lock = threading.Lock()
+        self.clips = OrderedDict()              # asset id -> (content type, retimed bytes)
+        self.clips_lock = threading.Lock()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -83,6 +92,8 @@ class Handler(BaseHTTPRequestHandler):
         if FANART.match(path) and base_url:
             person, asset_id = FANART.match(path).groups()
             return self.fanart(asset_id, base_url, api_key, bool(person))
+        if CLIP.match(path) and base_url:
+            return self.clip(CLIP.match(path).group(1), base_url, api_key)
         if not ALLOWED.match(path) or not base_url:
             return self.send_error(404)
         headers = {k: self.headers[k] for k in REQUEST_HEADERS if self.headers.get(k)}
@@ -141,6 +152,49 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 pass
 
+    def clip(self, asset_id, base_url, api_key):
+        """A moving photo's own clip, slowed to CLIP_SPEED; kept a while, as Kodi reads it in ranges."""
+        with self.server.clips_lock:
+            found = self.server.clips.get(asset_id)
+        if not found:
+            req = Request('{}/api/assets/{}/original'.format(base_url, asset_id), headers={'x-api-key': api_key})
+            try:
+                with urlopen(req, timeout=TIMEOUT, context=self.server.ssl_ctx) as resp:
+                    ctype, data = resp.headers.get('Content-Type') or 'video/mp4', resp.read(CLIP_MAX + 1)
+            except (HTTPError, URLError, socket.timeout, OSError, IncompleteRead) as e:
+                kodi.log('proxy: clip {} failed: {}'.format(asset_id, e), xbmc.LOGWARNING)
+                return self.send_error(502)
+            if len(data) > CLIP_MAX:
+                return self.send_error(502)
+            found = ctype, retime(data, CLIP_SPEED) or data
+            with self.server.clips_lock:
+                self.server.clips[asset_id] = found
+                while len(self.server.clips) > CLIPS_KEPT:
+                    self.server.clips.popitem(last=False)
+        ctype, data = found
+        start, end = 0, len(data) - 1
+        asked = RANGE.match(self.headers.get('Range') or '')
+        if asked and asked.group(1):
+            start, end = int(asked.group(1)), min(int(asked.group(2) or end), end)
+        elif asked and asked.group(2):                  # the last n bytes
+            start = max(len(data) - int(asked.group(2)), 0)
+        if start > end:
+            self.send_response(416)
+            self.send_header('Content-Range', 'bytes */{}'.format(len(data)))
+            return self.end_headers()
+        self.send_response(206 if asked else 200)
+        self.send_header('Content-Type', ctype)
+        self.send_header('Content-Length', str(end - start + 1))
+        self.send_header('Accept-Ranges', 'bytes')
+        if asked:
+            self.send_header('Content-Range', 'bytes {}-{}/{}'.format(start, end, len(data)))
+        self.end_headers()
+        if self.command == 'GET':
+            try:
+                self.wfile.write(data[start:end + 1])
+            except OSError:
+                pass
+
     def portrait(self, person_id, base_url, api_key):
         """Of their recent photos, the newest with the fewest people, so a group shot doesn't stand in for all.
         Looked up only when Kodi shows the person's fanart: a lookup each in the listing is too slow."""
@@ -151,6 +205,64 @@ class Handler(BaseHTTPRequestHandler):
         with urlopen(req, timeout=TIMEOUT, context=self.server.ssl_ctx) as resp:
             found = json.loads(resp.read())['assets']['items']
         return min(found, key=lambda a: len(a.get('people') or []))['id']
+
+
+def boxes(data, start, end):
+    """(type, body start, end) of the MP4 boxes in data[start:end]."""
+    while start + 8 <= end:
+        size, kind = struct.unpack_from('>I4s', data, start)
+        head = 8
+        if size == 1:
+            size, head = struct.unpack_from('>Q', data, start + 8)[0], 16
+        elif size == 0:
+            size = end - start
+        if size < head or start + size > end:
+            raise ValueError('bad box')
+        yield kind, start + head, start + size
+        start += size
+
+
+def retime(data, speed):
+    """The MP4 slowed to speed without re-encoding, or None if it can't be: each track's timescale shrinks, so its
+    sample times stretch, and the durations kept in the movie's timescale grow to match. Fragmented files and ones
+    with sound are left alone."""
+    out = bytearray(data)
+    tracks = []
+
+    def stretch(at, wide):                              # a duration in the movie's timescale
+        fmt = '>Q' if wide else '>I'
+        value = struct.unpack_from(fmt, out, at)[0]
+        if value != (0xFFFFFFFFFFFFFFFF if wide else 0xFFFFFFFF):
+            struct.pack_into(fmt, out, at, round(value / speed))
+
+    def walk(start, end):
+        for kind, body, stop in boxes(out, start, end):
+            v = out[body] if body < stop else 0
+            if kind in (b'moof', b'mvex'):
+                raise ValueError('fragmented')
+            if kind in (b'moov', b'trak', b'mdia', b'edts'):
+                walk(body, stop)
+            elif kind == b'mvhd':
+                stretch(body + (24 if v else 16), v)
+            elif kind == b'tkhd':
+                stretch(body + (28 if v else 20), v)
+            elif kind == b'elst':
+                for n in range(struct.unpack_from('>I', out, body + 4)[0]):
+                    stretch(body + 8 + n * (20 if v else 12), v)
+            elif kind == b'mdhd':
+                at = body + (20 if v else 12)
+                struct.pack_into('>I', out, at, max(round(struct.unpack_from('>I', out, at)[0] * speed), 1))
+            elif kind == b'hdlr':
+                tracks.append(bytes(out[body + 8:body + 12]))
+
+    try:
+        walk(0, len(out))
+    except (ValueError, struct.error) as e:
+        kodi.log('proxy: clip not retimed: {}'.format(e), xbmc.LOGWARNING)
+        return None
+    if b'vide' not in tracks or b'soun' in tracks:
+        return None
+    return bytes(out)
 
 
 def announce(path, full):

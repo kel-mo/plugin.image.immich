@@ -94,6 +94,24 @@ def asset_dto(a):
             'thumbhash': None}
 
 
+def box(kind, *parts):
+    body = b''.join(parts)
+    return struct.pack('>I4s', 8 + len(body), kind) + body
+
+
+def clip_mp4(handlers=(b'vide',), fragmented=False):
+    """A tiny MP4 with the boxes the proxy retimes: 1.8 s, 1000 to the second for the movie, 15360 per track."""
+    traks = [box(b'trak',
+                 box(b'tkhd', bytes(4) + struct.pack('>IIIII', 0, 0, n + 1, 0, 1800) + bytes(60)),
+                 box(b'edts', box(b'elst', bytes(4) + struct.pack('>IIiI', 1, 1800, 0, 0x10000))),
+                 box(b'mdia', box(b'mdhd', bytes(4) + struct.pack('>IIII', 0, 0, 15360, 27648) + bytes(4)),
+                     box(b'hdlr', bytes(8) + kind + bytes(13))))
+             for n, kind in enumerate(handlers)]
+    moov = box(b'moov', box(b'mvhd', bytes(4) + struct.pack('>IIII', 0, 0, 1000, 1800) + bytes(80)), *traks,
+               *([box(b'mvex', box(b'trex', bytes(24)))] if fragmented else []))
+    return box(b'ftyp', b'isom' + bytes(4)) + moov + box(b'mdat', bytes(64))
+
+
 def png(a, long_side):
     w, h = (long_side, int(long_side / a['ratio'])) if a['ratio'] >= 1 else (int(long_side * a['ratio']), long_side)
     seed = hashlib.md5(a['id'].encode()).digest()
@@ -195,6 +213,8 @@ class Handler(BaseHTTPRequestHandler):
             a = BY_ID[parts[3]]
             if parts[4] == 'thumbnail':
                 return self.send(200, png(a, 250 if q.get('size') == 'thumbnail' else 1440), 'image/png')
+            if parts[4] == 'original':                  # as a moving photo's clip
+                return self.send(200, clip_mp4(), 'video/mp4')
             if parts[4] == 'video':
                 if not os.path.exists(VIDEO):
                     subprocess.run(['ffmpeg', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i',

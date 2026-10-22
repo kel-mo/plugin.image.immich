@@ -243,6 +243,10 @@ class ImmichClient:
     def video_url(self, asset_id):
         return self.media_url('/assets/{}/video/playback'.format(asset_id))
 
+    def clip_url(self, asset_id):
+        """A moving photo's own clip, slowed down by the proxy."""
+        return proxy_address() + '/clip/' + asset_id
+
     def original_url(self, asset_id):
         return self.media_url('/assets/{}/original'.format(asset_id))
 

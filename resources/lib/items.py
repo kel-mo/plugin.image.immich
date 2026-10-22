@@ -21,9 +21,9 @@ def when(taken):
     return taken.strftime('{} {}'.format(region('dateshort'), clock))
 
 
-def video_path(asset_id):
+def video_path(asset_id, action='video'):
     """Kodi skips its file date check for plugin paths; answering it from the proxy can stall Kodi."""
-    return 'plugin://{}/?action=video&id={}'.format(kodi.ADDON_ID, asset_id)
+    return 'plugin://{}/?action={}&id={}'.format(kodi.ADDON_ID, action, asset_id)
 
 
 def place(asset):

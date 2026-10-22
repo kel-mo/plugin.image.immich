@@ -27,6 +27,7 @@ SUPERSAMPLE = 2 ** 0.5                   # moving photos decode this much larger
 SETTLE = 1.5                             # seconds a paused photo takes to ease back to rest
 SWAP = 0.6                               # seconds a paused photo's sharp still takes to fade in or out
 DECODE_WAIT = 1.5                        # seconds Kodi may still be decoding after the proxy has sent a photo
+CLIP_FADE = 0.3                          # seconds a moving photo's clip takes to fade in or out
 CLOSE = {9, 10, 13, 92}                  # parent dir, previous menu, stop, back
 PAUSE = {7, 12, 79, 229}                 # select, pause, play, play/pause
 NEXT = {2, 14, 77}                       # right, next item, fast forward
@@ -150,6 +151,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.setProperty('immich.clock', 'true' if kodi.setting_bool('clock') else 'false')
         self.layers = [[self.getControl(base + k) for k in range(4)] for base in (100, 200)]
         self.stills = [self.getControl(k) for k in (400, 402, 403)]
+        self.video_window = self.getControl(2)
         for group in [layer[0] for layer in self.layers] + self.stills[:1]:
             group.setAnimations([anim('fade', start=0, end=0, time=0)])
         self.shown = None                   # layer on screen
@@ -319,6 +321,8 @@ class Viewer(xbmcgui.WindowXMLDialog):
             # start once the poster is up
             self.video = {'id': asset['id'], 'at': self.shown_at + fade / 1000.0 + 0.3, 'started': False}
             self.next_at = None
+        elif asset.get('live') and not self.playing:   # stepped to by hand: a moving photo plays its clip once
+            self.video = {'id': asset['live'], 'at': self.preload_at, 'started': False, 'clip': True}
 
     def pan_zoom(self, main, fade, resume=False, delay=0):
         """Slow zoom in or out around a random focal point, spanning the fades on both ends.
@@ -509,14 +513,32 @@ class Viewer(xbmcgui.WindowXMLDialog):
 
     # ---------------------------------------------------------------- video
     def play_video(self):
-        url = items.video_path(self.video['id'])
+        clip = self.video.get('clip')
+        url = items.video_path(self.video['id'], 'clip' if clip else 'video')
         li = xbmcgui.ListItem(path=url, offscreen=True)
         li.setMimeType('video/mp4')
         li.setContentLookup(False)
+        self.place_video(clip)
         self.player.play(url, li)
         self.video.update(at=None, deadline=time.time() + 20)
-        self.setProperty('immich.video', 'true')
         self.setProperty('immich.status', '')
+
+    def place_video(self, clip):
+        """A clip over its photo at rest, so it doesn't letterbox over the backdrop; a video fills the screen."""
+        w, h = 1920, 1080
+        if clip and self.shown is not None and self.main is not self.layers[self.shown][2]:   # fitted, not covering
+            ratio = self.assets[self.index]['ratio']
+            w, h = (1080 * ratio, 1080) if ratio < SCREEN else (1920, 1920 / ratio)
+        self.video_window.setPosition(round(960 - w / 2), round(540 - h / 2))
+        self.video_window.setWidth(round(w))
+        self.video_window.setHeight(round(h))
+
+    def video_time(self):
+        """(position, length) in seconds of what Kodi is playing; zeros once it has stopped."""
+        try:
+            return self.player.getTime(), self.player.getTotalTime()
+        except RuntimeError:
+            return 0.0, 0.0
 
     def stop_video(self):
         if self.video:
@@ -532,7 +554,18 @@ class Viewer(xbmcgui.WindowXMLDialog):
             if time.time() >= self.video['at']:
                 self.play_video()
         elif self.player.isPlayingVideo():
-            self.video['started'] = True
+            video = self.video
+            video['started'] = True
+            position, length = self.video_time()
+            fade = CLIP_FADE * 1000
+            if not video.get('shown') and position > 0:        # the photo or poster stays up until a frame is
+                video['shown'] = True
+                self.video_window.setAnimations([anim('fade', start=0, end=100, time=fade)])
+                self.setProperty('immich.video', 'true')
+            elif video.get('clip') and video.get('shown') and not video.get('fading') and \
+                    length - position <= CLIP_FADE + 0.1:      # polled every 0.1 s
+                video['fading'] = True                         # back to the photo before the clip runs out
+                self.video_window.setAnimations([anim('fade', start=100, end=0, time=fade)])
         elif self.video['started'] or time.time() > self.video['deadline']:
             self.stop_video()
             if self.playing:
@@ -548,13 +581,14 @@ class Viewer(xbmcgui.WindowXMLDialog):
             self.display(self.index + 1, 500)
         elif action in PREV:
             self.display(self.index - 1, 500)
-        elif action in PAUSE and self.video:
+        elif action in PAUSE and self.video and not self.video.get('clip'):
             if self.video['at'] is None:                # started; pause the player itself
                 xbmc.executebuiltin(PLAY_PAUSE)
                 self.video['paused'] = not self.video.get('paused')
                 self.setProperty('immich.status', kodi.L(30700) if self.video['paused'] else '')
         elif action in PAUSE:
             now = time.time()
+            self.stop_video()                       # a moving photo's clip
             self.playing = not self.playing
             self.setProperty('immich.status', '' if self.playing else kodi.L(30700))
             if self.playing:                        # a resume starts the slide afresh, from rest
