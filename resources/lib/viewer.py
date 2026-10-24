@@ -42,7 +42,6 @@ CORNERS = (('', ''), ('top', ''), ('top', 'right'), ('', 'right'))   # the date'
 # Player.stop() and pause() hold the GIL until Kodi is done, and closing a file asks the proxy for its date
 STOP = 'PlayerControl(Stop)'
 PLAY_PAUSE = 'PlayerControl(Play)'
-UNDECODABLE = {'image/avif'}             # originals LibreELEC's Kodi can't show over http
 ASSET_ID = re.compile(r'[0-9a-f-]+')     # safe in a file name
 
 
@@ -138,11 +137,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.height = gui_height()        # once: getInfoLabel keeps the GIL while it waits on Kodi's GUI lock
         self.size = 'preview'
         if kodi.setting_bool('hires'):
-            try:
-                perms = set((self.client.key_info() or {}).get('permissions') or [])
-            except ApiError:
-                perms = set()
-            if perms & {'all', 'asset.download'}:   # fullsize redirects to the original
+            if self.client.can_download():
                 self.size = 'fullsize'
             else:
                 kodi.notify(kodi.L(30702))
@@ -337,7 +332,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
             if not asset.get('height'):
                 shaped = from_asset(raw)
                 asset['width'], asset['height'] = shaped['width'], shaped['height']
-        return 'preview' if asset['mime'] in UNDECODABLE else 'fullsize'
+        return 'preview' if asset['mime'] in proxy.UNDECODABLE else 'fullsize'
 
     def display(self, index, fade=None):
         if self.more and index >= len(self.assets) - 3:

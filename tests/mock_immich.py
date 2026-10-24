@@ -212,6 +212,8 @@ class Handler(BaseHTTPRequestHandler):
         if len(parts) >= 5 and parts[2] == 'assets' and parts[3] in BY_ID:
             a = BY_ID[parts[3]]
             if parts[4] == 'thumbnail':
+                if q.get('size') == 'fullsize' and a['n'] % 7 == 3:     # fullsize is the original, AVIF here
+                    return self.send(200, b'\0\0\0\x1cftypavif', 'image/avif')
                 return self.send(200, png(a, 250 if q.get('size') == 'thumbnail' else 1440), 'image/png')
             if parts[4] == 'original':                  # as a moving photo's clip
                 return self.send(200, clip_mp4(), 'video/mp4')

@@ -37,9 +37,11 @@ CLIP_SPEED = 0.6                         # moving photos' clips last a second or
 CLIP_MAX = 64 * 1024 * 1024
 CLIPS_KEPT = 2                           # Kodi reads a clip in several ranges
 VIEWED = re.compile(r'[?&]size=(preview|fullsize)(&|$)')   # the viewer's photos, not list thumbnails
+FULLSIZE = re.compile(r'[?&]size=fullsize(&|$)')
 PHOTOS_KEPT = 4                          # recent photos sent again while Immich can't be reached
 PHOTOS_BYTES = 64 * 1024 * 1024
 AWAY = {401, 403, 429, 502, 503, 504}    # Immich out of reach, or turning every photo away
+UNDECODABLE = {'image/avif'}             # originals LibreELEC's Kodi can't show over http
 RANGE = re.compile(r'bytes=(\d*)-(\d*)$')
 ALLOWED = re.compile(r'/api/(assets/[0-9a-f-]+/(thumbnail|original|video/playback)|people/[0-9a-f-]+/thumbnail)$')
 REQUEST_HEADERS = ('Range', 'If-None-Match', 'If-Modified-Since')
@@ -116,6 +118,12 @@ class Handler(BaseHTTPRequestHandler):
         req = Request(base_url + self.path, headers=headers, method=self.command)
         try:
             resp = urlopen(req, timeout=TIMEOUT, context=self.server.ssl_ctx)
+            ctype = resp.headers.get_content_type()
+            if resp.status == 200 and PHOTO.match(path) and FULLSIZE.search(self.path) and ctype in UNDECODABLE:
+                kodi.debug('proxy: {} is {}, sending its preview'.format(path, ctype))
+                resp.close()
+                req = Request('{}{}?size=preview&edited=true'.format(base_url, path), headers=headers, method=self.command)
+                resp = urlopen(req, timeout=TIMEOUT, context=self.server.ssl_ctx)
         except HTTPError as e:                  # 304 and 416 included
             resp = e
         except (URLError, socket.timeout, OSError) as e:

@@ -30,12 +30,12 @@ def place(asset):
     return ', '.join(p for p in (asset.get('city'), asset.get('country')) if p)
 
 
-def asset_item(client, asset, path=None):
-    """path: what Kodi opens on click; defaults to the image or video itself."""
+def asset_item(client, asset, path=None, size='preview'):
+    """path: what Kodi opens on click; defaults to the image, at size, or video itself."""
     label = when(asset['taken']) or asset['id']
     thumb = client.thumb_url(asset['id'])
     if asset['image']:
-        url = client.thumb_url(asset['id'], 'preview')
+        url = client.thumb_url(asset['id'], size)
     else:
         url = video_path(asset['id'])
     li = xbmcgui.ListItem(label, place(asset), path=path or url, offscreen=True)

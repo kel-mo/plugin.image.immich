@@ -395,6 +395,15 @@ class Proxy(unittest.TestCase):
         self.assertEqual(self.done(since), [f'{self.asset}:preview'])
         self.assertEqual(self.failures(since), [(f'{other}:preview', 'away')])
 
+    def test_avif_original_sent_as_its_preview(self):
+        avif = next(a['id'] for a in mock_immich.ASSETS if a['n'] % 7 == 3)
+        with urlopen(f'{self.base}/api/assets/{avif}/thumbnail?size=preview&edited=true', timeout=10) as resp:
+            preview = resp.read()
+        for method in ('HEAD', 'GET'):
+            with urlopen(Request(f'{self.base}/api/assets/{avif}/thumbnail?size=fullsize', method=method),
+                         timeout=10) as resp:
+                self.assertEqual((resp.headers['Content-Type'], resp.read()), ('image/png', b'' if method == 'HEAD' else preview))
+
     def test_list_thumbnails_not_kept(self):
         with urlopen(f'{self.base}/api/assets/{self.asset}/thumbnail?size=thumbnail', timeout=10) as resp:
             resp.read()
@@ -1139,6 +1148,27 @@ class PhotoOrder(NoProxy):
     def test_memories_newest_year_first(self):
         years = [y for y, _ in plugin.today_memories(self.client)]
         self.assertEqual(years, sorted(years, reverse=True))
+
+
+class KodiViewer(NoProxy):
+    def listed(self, viewer='false', hires='true', perms=('all',)):
+        client = api.ImmichClient()
+        del xbmcplugin.ITEMS[:]
+        with mock.patch.dict(xbmcaddon.SETTINGS, {'viewer': viewer, 'hires': hires}), \
+                mock.patch.object(client, 'key_info', lambda: {'permissions': list(perms)}):
+            plugin.album(client, {'album_id': 'album-1'})
+        return [url for url, li, _ in xbmcplugin.ITEMS if '/thumbnail' in url]
+
+    def test_full_resolution_follows_the_setting(self):
+        self.assertTrue(self.listed())
+        self.assertTrue(all('size=fullsize' in url for url in self.listed()))
+        self.assertTrue(all('size=preview' in url for url in self.listed(hires='false')))
+
+    def test_needs_the_download_permission(self):
+        self.assertTrue(all('size=preview' in url for url in self.listed(perms=['asset.read'])))
+
+    def test_own_viewer_opens_through_the_addon(self):
+        self.assertEqual(self.listed(viewer='true'), [])
 
 
 @unittest.skipUnless(PIL, 'needs PIL')

@@ -309,10 +309,11 @@ def list_assets(client, assets, source, category=None, more=None, play=True):
     if assets and play:
         action_item(kodi.L(30004), 'play', **source)
     own_viewer = kodi.setting_bool('viewer')
+    size = 'fullsize' if not own_viewer and kodi.setting_bool('hires') and client.can_download() else 'preview'
     for asset in assets:
         path = url_for('play', start=asset['id'], autoplay='0', shuffle='0', **source) \
             if own_viewer and asset['image'] else None
-        li, url = items.asset_item(client, asset, path)
+        li, url = items.asset_item(client, asset, path, size)
         li.addContextMenuItems([(kodi.L(30004), run_plugin('play', start=asset['id'], shuffle='0', **source))])
         xbmcplugin.addDirectoryItem(HANDLE, path or url, li, isFolder=False)
     if more:

@@ -151,6 +151,14 @@ class ImmichClient:
     def key_info(self):
         return self.get('/api-keys/me')
 
+    def can_download(self):
+        """Whether the key may fetch originals, which fullsize redirects to."""
+        try:
+            perms = set((self.key_info() or {}).get('permissions') or [])
+        except ApiError:
+            return False
+        return bool(perms & {'all', 'asset.download'})
+
     # ---------------------------------------------------------------- library
     def timeline_buckets(self, **filters):
         return self.get('/timeline/buckets', **_filters(filters))
