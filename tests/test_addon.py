@@ -1544,9 +1544,13 @@ class Screensaver(NoProxy):
         self.assertEqual(points.get('xbmc.ui.screensaver'), 'screensaver.py')
         self.assertTrue(os.path.exists(os.path.join(ROOT, 'screensaver.py')))
 
-    def run_screensaver(self, source, found, query='', albums='', ordered=True, start=0):
+    def run_screensaver(self, source, found, query='', albums='', ordered=True, start=0, refills=0):
         from resources.lib import screensaver
         shown, self.asked = [], []
+
+        def play(client, assets, **kw):             # and the batches the viewer asks for as it runs low
+            shown.append((assets, kw))
+            shown.extend((kw['more'](), kw) for _ in range(refills))
 
         def source_assets(client, params):
             self.asked.append(params)
@@ -1561,7 +1565,7 @@ class Screensaver(NoProxy):
                 mock.patch.object(plugin, 'source_assets', source_assets), \
                 mock.patch.object(screensaver.random, 'shuffle', list.reverse), \
                 mock.patch.object(screensaver.random, 'randrange', lambda n: start % n), \
-                mock.patch.object(viewer, 'play', lambda client, assets, **kw: shown.append((assets, kw))):
+                mock.patch.object(viewer, 'play', play):
             screensaver.run()
         return shown
 
@@ -1628,6 +1632,15 @@ class Screensaver(NoProxy):
             shown = self.run_screensaver(5, found)
             (assets, _), = shown
             self.assertEqual([a['id'] for a in assets], ['h'])     # skips videos-only and empty albums
+
+    def test_random_album_moves_on_to_another(self):
+        found = {'album-1': [{'id': 'h1', 'image': True}, {'id': 'h2', 'image': True}],
+                 'album-2': [{'id': 'g1', 'image': True}]}
+        shown = self.run_screensaver(5, found, refills=3)
+        self.assertEqual([[a['id'] for a in assets] for assets, _ in shown], [['g1'], ['h1', 'h2'], ['g1'], ['h1', 'h2']])
+        found['album-2'] = [{'id': 'v', 'image': False}]                      # no other album with photos
+        shown = self.run_screensaver(5, found, refills=1)
+        self.assertEqual([[a['id'] for a in assets] for assets, _ in shown], [['h1', 'h2'], []])
 
     def test_choose_albums(self):
         xbmcgui.ANSWERS['multiselect'][:] = [[0, 1]]

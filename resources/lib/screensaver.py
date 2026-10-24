@@ -35,15 +35,28 @@ def album_photos(client):
     return list(found.values())
 
 
-def random_album_photos(client):
-    albums = [a for a in client.albums() if a.get('assetCount')]
+def random_album_photos(client, skip=None):
+    """(album id, photos) of a random album other than skip; (skip, []) when there's no other."""
+    albums = [a for a in client.albums() if a.get('assetCount') and a['id'] != skip]
     random.shuffle(albums)
     for a in albums:                            # some hold only videos
         found = photos(client, 'album', album_id=a['id'])
         if found:
             kodi.debug('screensaver: album {}'.format(a.get('albumName')))
-            return found
-    return []
+            return a['id'], found
+    return skip, []
+
+
+def next_albums(client, album_id, mixed):
+    """Another random album each time the viewer nears the end of one, so one album doesn't play over and over."""
+    current = [album_id]
+
+    def more():
+        current[0], found = random_album_photos(client, skip=current[0])
+        if mixed:
+            random.shuffle(found)
+        return found
+    return more
 
 
 def run():
@@ -51,10 +64,12 @@ def run():
         client = ImmichClient()
         source = SOURCES[min(max(kodi.setting_int('screensaver_source'), 0), len(SOURCES) - 1)]
         query = kodi.setting('screensaver_query').strip()
+        more = None
         if source == 'albums':
             assets = album_photos(client)
         elif source == 'random_album':
-            assets = random_album_photos(client)
+            album_id, assets = random_album_photos(client)
+            more = next_albums(client, album_id, not in_order(source))
         else:
             assets = photos(client, source, query=query) if source != 'search' or query else []
         if not assets and source != 'random':      # nothing on this day, no favourites, matches or albums
@@ -64,4 +79,4 @@ def run():
         return
     if not in_order(source):
         random.shuffle(assets)
-    viewer.play(client, assets, more=client.random if source == 'random' else None, screensaver=True)
+    viewer.play(client, assets, more=client.random if source == 'random' else more, screensaver=True)
