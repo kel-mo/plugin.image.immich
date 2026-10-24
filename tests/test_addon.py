@@ -802,6 +802,15 @@ class Tiles(NoProxy):
         self.assertLess(darkest(im), darkest(plain) * 0.6)                                   # the halo beside the text
 
     @unittest.skipUnless(PIL, 'needs PIL')
+    def test_tile_keeps_the_colour_profile(self):
+        from PIL import Image
+        dest = os.path.join(kodi.ensure_dir(tiles.tile_dir()), 'x.jpg')
+        out = io.BytesIO(); Image.new('RGB', (600, 400), (200, 100, 100)).save(out, 'PNG', icc_profile=b'a P3 profile')
+        with mock.patch.object(tiles, 'font_file', lambda: (None, False)):
+            tiles.render(out.getvalue(), 'Immich', dest)
+        self.assertEqual(Image.open(dest).info.get('icc_profile'), b'a P3 profile')
+
+    @unittest.skipUnless(PIL, 'needs PIL')
     def test_one_text_size_fits_every_name(self):
         from PIL import Image, ImageDraw
         names = ['Places', 'On this day and more']
@@ -1078,11 +1087,11 @@ class PhotoOrder(NoProxy):
 
 @unittest.skipUnless(PIL, 'needs PIL')
 class Backdrop(unittest.TestCase):
-    def photo(self, w, h):
+    def photo(self, w, h, mode='RGB', icc=None):
         from PIL import Image
-        im = Image.new('RGB', (w, h), (200, 60, 60))
-        im.paste((20, 220, 20), (0, 0, w // 2, h // 2))                 # a sharp corner to find again
-        out = io.BytesIO(); im.save(out, 'PNG')
+        im = Image.new(mode, (w, h), (200, 60, 60) if mode == 'RGB' else 128)
+        im.paste((20, 220, 20) if mode == 'RGB' else 0, (0, 0, w // 2, h // 2))   # a sharp corner to find again
+        out = io.BytesIO(); im.save(out, 'PNG', icc_profile=icc)
         return im, out.getvalue()
 
     def test_tall_photo_sits_whole_on_a_blurred_copy(self):
@@ -1102,6 +1111,13 @@ class Backdrop(unittest.TestCase):
         out = Image.open(io.BytesIO(backdrop.compose(data)))
         self.assertEqual(out.size, (1200, 675))
         self.assertEqual(close(out.getpixel((10, 187 + 10)), (20, 220, 20)), True)
+
+    def test_colour_profile_is_kept_for_kodi(self):
+        from PIL import Image
+        _, data = self.photo(600, 900, icc=b'a P3 profile')
+        self.assertEqual(Image.open(io.BytesIO(backdrop.compose(data))).info.get('icc_profile'), b'a P3 profile')
+        _, data = self.photo(600, 900, 'L', icc=b'a gray profile')       # wrong for the RGB fanart
+        self.assertNotIn('icc_profile', Image.open(io.BytesIO(backdrop.compose(data))).info)
 
     def test_a_screen_shaped_photo_is_left_alone(self):
         _, data = self.photo(1440, 810)

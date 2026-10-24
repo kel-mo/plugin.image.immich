@@ -20,7 +20,9 @@ def compose(data, pixel=False, aspect=None, look=None):
         from PIL import Image, ImageEnhance, ImageFilter, ImageOps
     except ImportError:
         return data
-    im = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert('RGB')
+    src = Image.open(io.BytesIO(data))
+    icc = src.info.get('icc_profile') if src.mode in ('RGB', 'RGBA') else None   # kept for Kodi to convert
+    im = ImageOps.exif_transpose(src).convert('RGB')
     w, h = im.size
     source = im
     if abs(w / h - SCREEN) < SLACK and (not pixel or h >= CANVAS[1]):
@@ -42,7 +44,7 @@ def compose(data, pixel=False, aspect=None, look=None):
     back = back.resize(size, Image.BICUBIC)                      # blurred and dimmed small, then stretched: quick
     back.paste(im, ((size[0] - w) // 2, (size[1] - h) // 2))
     out = io.BytesIO()
-    back.save(out, 'JPEG', quality=88, subsampling=0 if look in LOOKS else -1)   # full chroma keeps the stripes
+    back.save(out, 'JPEG', quality=88, subsampling=0 if look in LOOKS else -1, icc_profile=icc)   # full chroma keeps the stripes
     return out.getvalue()
 
 

@@ -202,13 +202,15 @@ def render(data, label, dest, size=SIZE // 5):
             f.write(data)
         os.replace(tmp, dest)
         return
-    im = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert('RGB')
+    src = Image.open(io.BytesIO(data))
+    icc = src.info.get('icc_profile') if src.mode in ('RGB', 'RGBA') else None   # kept for Kodi to convert
+    im = ImageOps.exif_transpose(src).convert('RGB')
     im = ImageEnhance.Brightness(ImageOps.fit(im, (SIZE, SIZE), Image.LANCZOS)).enhance(DIM)
     face, stroke = font(size)
     mask = text_mask(lines(ImageDraw.Draw(im), label, face, stroke, fit(size)) or label, face, stroke, size)
     im.paste((0, 0, 0), mask=halo(mask, size))
     im.paste((255, 255, 255), mask=mask)
-    im.save(tmp, 'JPEG', quality=88)
+    im.save(tmp, 'JPEG', quality=88, icc_profile=icc)
     os.replace(tmp, dest)
 
 
