@@ -674,9 +674,11 @@ class KenBurns(NoProxy):
         for ratio in (16 / 9, 3.92):                        # zoom, then pan
             main = self.viewer(ratio=ratio)
             kb = self.window.kb
-            kb['t0'] -= kb['time'] / 2000.0                 # half way through
+            now = time.time()
+            kb['t0'] = now - kb['time'] / 2000.0            # half way through
             mid = self.window.state(viewer.ease(0.5, 'skew'))
-            self.window.settle()
+            with mock.patch.object(viewer.time, 'time', return_value=now):
+                self.window.settle()
             legs = main.last()
             self.assertEqual({(f['tween'], f['easing'], f['time']) for f in legs}, {('sine', 'out', '1500')})
             zoom = next(f for f in legs if f['effect'] == 'zoom')
