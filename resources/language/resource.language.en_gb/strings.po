@@ -373,5 +373,5 @@ msgid "Full resolution needs an API key with the asset.download permission. Show
 msgstr ""
 
 msgctxt "#30703"
-msgid "Can't get photos from Immich. Showing recent ones until it's back."
+msgid "Can't get photos from Immich."
 msgstr ""
