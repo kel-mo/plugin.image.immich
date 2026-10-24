@@ -43,6 +43,7 @@ PHOTOS_BYTES = 64 * 1024 * 1024
 AWAY = {401, 403, 429, 502, 503, 504}    # Immich out of reach, or turning every photo away
 UNDECODABLE = {'image/avif'}             # originals LibreELEC's Kodi can't show over http
 RANGE = re.compile(r'bytes=(\d*)-(\d*)$')
+WHOLE = re.compile(r'bytes 0-(\d+)/(\d+)$')    # a 206 that is the whole file: Kodi asks for bytes=0-
 ALLOWED = re.compile(r'/api/(assets/[0-9a-f-]+/(thumbnail|original|video/playback)|people/[0-9a-f-]+/thumbnail)$')
 REQUEST_HEADERS = ('Range', 'If-None-Match', 'If-Modified-Since')
 RESPONSE_HEADERS = ('Content-Type', 'Content-Length', 'Content-Range', 'Accept-Ranges', 'Cache-Control', 'ETag',
@@ -138,8 +139,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if why:
             announce(path, self.path, why)
-        keep = [] if self.command == 'GET' and resp.status == 200 and PHOTO.match(path) and VIEWED.search(self.path) \
-            else None
+        keep = [] if self.command == 'GET' and whole(resp) and PHOTO.match(path) and VIEWED.search(self.path) else None
         with resp:
             self.send_response(resp.status)
             for k in RESPONSE_HEADERS:
@@ -180,18 +180,36 @@ class Handler(BaseHTTPRequestHandler):
             return False
         kodi.debug('proxy: {} sent from its copy'.format(path))
         ctype, data = found
-        self.send_response(200)
-        self.send_header('Content-Type', ctype or 'image/jpeg')
-        self.send_header('Content-Length', str(len(data)))
-        self.end_headers()
-        if self.command == 'GET':
-            try:
-                self.wfile.write(data)
-            except OSError:
-                return True
+        if self.send_bytes(ctype or 'image/jpeg', data) and self.command == 'GET':
             announce(path, self.path)
         return True
 
+    def send_bytes(self, ctype, data):
+        """data, or the range of it asked for; False if it didn't get there."""
+        start, end = 0, len(data) - 1
+        asked = RANGE.match(self.headers.get('Range') or '')
+        if asked and asked.group(1):
+            start, end = int(asked.group(1)), min(int(asked.group(2) or end), end)
+        elif asked and asked.group(2):                  # the last n bytes
+            start = max(len(data) - int(asked.group(2)), 0)
+        if start > end:
+            self.send_response(416)
+            self.send_header('Content-Range', 'bytes */{}'.format(len(data)))
+            self.end_headers()
+            return False
+        self.send_response(206 if asked else 200)
+        self.send_header('Content-Type', ctype)
+        self.send_header('Content-Length', str(end - start + 1))
+        self.send_header('Accept-Ranges', 'bytes')
+        if asked:
+            self.send_header('Content-Range', 'bytes {}-{}/{}'.format(start, end, len(data)))
+        self.end_headers()
+        if self.command == 'GET':
+            try:
+                self.wfile.write(data[start:end + 1])
+            except OSError:
+                return False
+        return True
 
     def fanart(self, asset_id, base_url, api_key, person=False):
         """The asset's preview, or a photo of a person, composed to fit the screen."""
@@ -239,29 +257,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.server.clips[asset_id] = found
                 while len(self.server.clips) > CLIPS_KEPT:
                     self.server.clips.popitem(last=False)
-        ctype, data = found
-        start, end = 0, len(data) - 1
-        asked = RANGE.match(self.headers.get('Range') or '')
-        if asked and asked.group(1):
-            start, end = int(asked.group(1)), min(int(asked.group(2) or end), end)
-        elif asked and asked.group(2):                  # the last n bytes
-            start = max(len(data) - int(asked.group(2)), 0)
-        if start > end:
-            self.send_response(416)
-            self.send_header('Content-Range', 'bytes */{}'.format(len(data)))
-            return self.end_headers()
-        self.send_response(206 if asked else 200)
-        self.send_header('Content-Type', ctype)
-        self.send_header('Content-Length', str(end - start + 1))
-        self.send_header('Accept-Ranges', 'bytes')
-        if asked:
-            self.send_header('Content-Range', 'bytes {}-{}/{}'.format(start, end, len(data)))
-        self.end_headers()
-        if self.command == 'GET':
-            try:
-                self.wfile.write(data[start:end + 1])
-            except OSError:
-                pass
+        self.send_bytes(*found)
 
     def portrait(self, person_id, base_url, api_key):
         """Of their recent photos, the newest with the fewest people, so a group shot doesn't stand in for all.
@@ -331,6 +327,14 @@ def retime(data, speed):
     if b'vide' not in tracks or b'soun' in tracks:
         return None
     return bytes(out)
+
+
+def whole(resp):
+    """Whether Immich's answer carries the whole photo."""
+    if resp.status == 200:
+        return True
+    found = resp.status == 206 and WHOLE.match(resp.headers.get('Content-Range') or '')
+    return bool(found) and int(found.group(1)) + 1 == int(found.group(2))
 
 
 def failure(status):

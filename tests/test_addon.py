@@ -395,6 +395,21 @@ class Proxy(unittest.TestCase):
         self.assertEqual(self.done(since), [f'{self.asset}:preview'])
         self.assertEqual(self.failures(since), [(f'{other}:preview', 'away')])
 
+    def test_photo_asked_for_in_a_range_is_kept(self):
+        url = f'{self.base}/api/assets/{self.asset}/thumbnail?size=fullsize'
+        with urlopen(Request(url, headers={'Range': 'bytes=0-'}), timeout=10) as resp:     # as Kodi asks
+            self.assertEqual(resp.status, 206)
+            photo = resp.read()
+        with urlopen(Request(url, headers={'Range': 'bytes=0-9'}), timeout=10) as resp:   # only part of it
+            resp.read()
+        time.sleep(0.2)
+        self.upstream('http://127.0.0.1:1')
+        with urlopen(Request(url, headers={'Range': 'bytes=0-'}), timeout=10) as resp:
+            self.assertEqual((resp.status, resp.headers['Content-Range'], resp.read()),
+                             (206, f'bytes 0-{len(photo) - 1}/{len(photo)}', photo))
+        with urlopen(Request(url, headers={'Range': 'bytes=10-19'}), timeout=10) as resp:
+            self.assertEqual(resp.read(), photo[10:20])
+
     def test_avif_original_sent_as_its_preview(self):
         avif = next(a['id'] for a in mock_immich.ASSETS if a['n'] % 7 == 3)
         with urlopen(f'{self.base}/api/assets/{avif}/thumbnail?size=preview&edited=true', timeout=10) as resp:

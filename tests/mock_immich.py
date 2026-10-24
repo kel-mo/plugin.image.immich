@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import struct
 import subprocess
 import sys
@@ -140,9 +141,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def send(self, code, body, ctype='application/json'):
         data = body if isinstance(body, bytes) else json.dumps(body).encode()
+        asked = code == 200 and isinstance(body, bytes) and re.match(r'bytes=(\d+)-(\d*)$', self.headers.get('Range') or '')
+        whole = len(data)
+        if asked:                                       # as Immich sends files; Kodi asks for bytes=0-
+            start, end = int(asked.group(1)), min(int(asked.group(2) or whole - 1), whole - 1)
+            code, data = 206, data[start:end + 1]
         self.send_response(code)
         self.send_header('Content-Type', ctype)
         self.send_header('Content-Length', str(len(data)))
+        if asked:
+            self.send_header('Content-Range', 'bytes {}-{}/{}'.format(start, end, whole))
         self.end_headers()
         self.wfile.write(data)
 
