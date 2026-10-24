@@ -24,6 +24,8 @@ def album_photos(client):
     if in_order('albums'):                      # albums by date, each one's photos in the chosen photo order
         dates = {a['id']: a.get('startDate') or '' for a in client.albums()}
         chosen.sort(key=lambda i: dates.get(i, ''), reverse=plugin.newest_first())
+        start = random.randrange(len(chosen)) if chosen else 0
+        chosen = chosen[start:] + chosen[:start]    # a random one first, as one large album can fill hours
     found = {}
     for album_id in chosen:
         try:

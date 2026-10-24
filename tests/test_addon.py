@@ -1544,7 +1544,7 @@ class Screensaver(NoProxy):
         self.assertEqual(points.get('xbmc.ui.screensaver'), 'screensaver.py')
         self.assertTrue(os.path.exists(os.path.join(ROOT, 'screensaver.py')))
 
-    def run_screensaver(self, source, found, query='', albums='', ordered=True):
+    def run_screensaver(self, source, found, query='', albums='', ordered=True, start=0):
         from resources.lib import screensaver
         shown, self.asked = [], []
 
@@ -1560,6 +1560,7 @@ class Screensaver(NoProxy):
                                   not ordered if k == 'screensaver_shuffle' else setting(k)), \
                 mock.patch.object(plugin, 'source_assets', source_assets), \
                 mock.patch.object(screensaver.random, 'shuffle', list.reverse), \
+                mock.patch.object(screensaver.random, 'randrange', lambda n: start % n), \
                 mock.patch.object(viewer, 'play', lambda client, assets, **kw: shown.append((assets, kw))):
             screensaver.run()
         return shown
@@ -1604,6 +1605,12 @@ class Screensaver(NoProxy):
         self.assertEqual([a['id'] for a in assets], ['h1', 'h2', 'g1', 'g2'])
         (assets, _), = self.run_screensaver(4, found, albums='album-1,album-2', ordered=False)
         self.assertEqual([a['id'] for a in assets], ['g2', 'g1', 'h2', 'h1'])     # shuffled (reversed here)
+
+    def test_albums_in_order_start_from_a_random_one(self):
+        found = {'album-1': [{'id': 'h1', 'image': True}, {'id': 'h2', 'image': True}],
+                 'album-2': [{'id': 'g1', 'image': True}, {'id': 'g2', 'image': True}]}
+        (assets, _), = self.run_screensaver(4, found, albums='album-1,album-2', start=1)
+        self.assertEqual([a['id'] for a in assets], ['h1', 'h2', 'g1', 'g2'])     # the newer album, then round
 
     def test_in_order_is_for_albums_only(self):
         found = {'favourites': [{'id': 'a', 'image': True}, {'id': 'b', 'image': True}]}
