@@ -21,6 +21,9 @@ FILL_SLACK = 0.1                         # how far from 16:9 a photo may be and 
 PAN_WIDE = 2.4                           # panoramas this wide pan across the screen instead
 PAN_SPEED = 0.015                        # screen widths a second
 LOAD_WAIT = 10                           # seconds a photo stays up waiting for the next to arrive
+RETRY = 3                                # seconds between tries at a photo the proxy couldn't send
+TRIES = {'gone': 1, 'error': 2, 'cut': 3}   # failures before a photo is left behind; 'away' is never the photo's
+AWAY_NOTICE = 60                         # seconds Immich may be away before the viewer says so
 AHEAD = 3                                # photos whose details are fetched in the background
 EASE_PEAK = 0.3                          # motion is fastest here: quick to start, long to settle
 SUPERSAMPLE = 2 ** 0.5                   # moving photos decode this much larger, then mipmaps shrink them smoothly
@@ -167,6 +170,11 @@ class Viewer(xbmcgui.WindowXMLDialog):
         self.still = None                   # a paused photo's screen-sized copy: control, photo, since, arrived, shown
         self.still_at = None
         self.unstill = None                 # (control, when) to let go of a still's texture once faded out
+        self.resume = None                  # the photo to carry on from, after showing kept ones
+        self.tries = {}                     # asset id -> failures that were the photo's own
+        self.skipping = False               # a photo was just left behind
+        self.away_since = None
+        self.told = False
 
     # --------------------------------------------------------------- slides
     def free_layer(self):
@@ -255,6 +263,58 @@ class Viewer(xbmcgui.WindowXMLDialog):
                 return True
         return False
 
+    def failed(self, name, since):
+        """Why the proxy couldn't send this photo since then, or None."""
+        for entry in xbmcgui.Window(10000).getProperty(proxy.FAILED).split():
+            failed, _, rest = entry.rpartition('@')
+            at, _, why = rest.partition(':')
+            if failed == name and float(at) >= since - 1:
+                return why
+        return None
+
+    def upcoming(self):
+        """The next photo, or the one being tried again while kept ones are shown."""
+        return (self.index + 1) % len(self.assets) if self.resume is None else self.resume
+
+    def check_failed(self, now):
+        """Try the next photo again if the proxy couldn't send it, or leave it behind, by why it failed."""
+        layer = self.free_layer()
+        name, since = self.waiting.get(layer, (None, 0))
+        why = name and not self.arrived(name, since) and self.failed(name, since)
+        if not why:
+            return
+        index = self.prepared.pop(layer)[0]
+        del self.waiting[layer]
+        asset = self.assets[index]
+        if why == 'away':
+            self.away_since = self.away_since or now
+            if not self.told and now - self.away_since >= AWAY_NOTICE:
+                self.told = True
+                kodi.notify(kodi.L(30703))
+        else:
+            self.away_since, self.told = None, False
+            tries = self.tries[asset['id']] = self.tries.get(asset['id'], 0) + 1
+            if tries >= TRIES.get(why, 1):
+                kodi.log('viewer: left {} behind: {}'.format(asset['id'], why))
+                self.resume = (index + 1) % len(self.assets)
+                self.preload_at = now + RETRY if self.skipping else now    # paced when many go at once
+                self.skipping = True
+                return
+        self.resume = index
+        self.preload_at = now + RETRY
+
+    def show_kept(self):
+        """While the next photo can't be had: one the proxy kept, the one shown longest ago first, so they take turns."""
+        names = [e.rpartition('@')[0].split(':') for e in xbmcgui.Window(10000).getProperty(proxy.DONE).split()]
+        kept = [n[0] for n in names if n[-1] in ('preview', 'fullsize')][-proxy.PHOTOS_KEPT:]
+        where = {a['id']: i for i, a in enumerate(self.assets)}
+        found = [where[i] for i in kept if i in where]
+        others = [i for i in found if i != self.index]
+        if others or found:
+            self.display((others or found)[0])
+        else:
+            self.next_at = time.time() + self.stay
+
     def look_ahead(self):
         """Fetch the next photos' details in the background, so preparing them doesn't wait on the network."""
         if self.size != 'fullsize' or (self.ahead and self.ahead.is_alive()):
@@ -283,6 +343,9 @@ class Viewer(xbmcgui.WindowXMLDialog):
         if self.more and index >= len(self.assets) - 3:
             self.refill()
         self.index = index % len(self.assets)
+        if self.index == self.resume:
+            self.resume = None
+        self.skipping = False
         asset = self.assets[self.index]
         fade = fade or self.fade
         self.stop_video()
@@ -569,7 +632,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         elif self.video['started'] or time.time() > self.video['deadline']:
             self.stop_video()
             if self.playing:
-                self.display(self.index + 1)
+                self.display(self.upcoming())
             else:
                 self.setProperty('immich.status', kodi.L(30700))
 
@@ -578,7 +641,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
         if action in CLOSE or self.screensaver:     # any key wakes the screensaver
             self.closed = True
         elif action in NEXT:
-            self.display(self.index + 1, 500)
+            self.display(self.upcoming(), 500)
         elif action in PREV:
             self.display(self.index - 1, 500)
         elif action in PAUSE and self.video and not self.video.get('clip'):
@@ -620,10 +683,15 @@ class Viewer(xbmcgui.WindowXMLDialog):
             if self.closed:
                 break
             now = time.time()
+            self.check_failed(now)
             if self.video:
                 self.poll_video()
             elif self.playing and self.next_at and now >= self.next_at and self.ready(self.free_layer(), now):
-                self.display(self.index + 1)
+                if self.resume is not None and self.free_layer() not in self.prepared:   # still failing
+                    self.show_kept()
+                else:
+                    self.away_since, self.told = None, False
+                    self.display(self.upcoming())
             if self.still_at and now >= self.still_at:
                 self.still_at = None
                 self.sharpen()
@@ -637,8 +705,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
                 self.unstill = None
             if self.shown is not None and self.preload_at and now >= self.preload_at:
                 self.preload_at = None
-                nxt = (self.index + 1) % len(self.assets)
-                self.prepare(nxt, self.free_layer())
+                self.prepare(self.upcoming(), self.free_layer())
         self.stop_video()
 
 

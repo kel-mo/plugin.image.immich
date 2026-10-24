@@ -24,6 +24,7 @@ PORT = 52283                             # fixed so Kodi's texture cache keeps i
 TRIES = 10
 PROPERTY = '{}.proxy'.format(kodi.ADDON_ID)   # Home window property holding the port
 DONE = '{}.done'.format(kodi.ADDON_ID)       # Home window property: photos fully sent, as id:size@time
+FAILED = '{}.failed'.format(kodi.ADDON_ID)   # Home window property: photos that failed, as id:size@time:why
 DONE_KEEP = 8
 PHOTO = re.compile(r'/api/assets/([0-9a-f-]+)/thumbnail$')
 TIMEOUT = 4                              # per socket wait: a relay under way ends inside Kodi's five-second wait at exit
@@ -35,6 +36,10 @@ CLIP = re.compile(r'/clip/([0-9a-f-]+)$')         # a moving photo's clip, slowe
 CLIP_SPEED = 0.6                         # moving photos' clips last a second or two, too quick to follow
 CLIP_MAX = 64 * 1024 * 1024
 CLIPS_KEPT = 2                           # Kodi reads a clip in several ranges
+VIEWED = re.compile(r'[?&]size=(preview|fullsize)(&|$)')   # the viewer's photos, not list thumbnails
+PHOTOS_KEPT = 4                          # recent photos sent again while Immich can't be reached
+PHOTOS_BYTES = 64 * 1024 * 1024
+AWAY = {401, 403, 429, 502, 503, 504}    # Immich out of reach, or turning every photo away
 RANGE = re.compile(r'bytes=(\d*)-(\d*)$')
 ALLOWED = re.compile(r'/api/(assets/[0-9a-f-]+/(thumbnail|original|video/playback)|people/[0-9a-f-]+/thumbnail)$')
 REQUEST_HEADERS = ('Range', 'If-None-Match', 'If-Modified-Since')
@@ -60,6 +65,16 @@ class Server(ThreadingHTTPServer):
         self.open_lock = threading.Lock()
         self.clips = OrderedDict()              # asset id -> (content type, retimed bytes)
         self.clips_lock = threading.Lock()
+        self.photos = OrderedDict()             # request path -> (content type, bytes), the newest last
+        self.photos_lock = threading.Lock()
+
+    def keep(self, path, ctype, data):
+        with self.photos_lock:
+            self.photos[path] = (ctype, data)
+            self.photos.move_to_end(path)
+            while len(self.photos) > PHOTOS_KEPT or \
+                    len(self.photos) > 1 and sum(len(d) for _, d in self.photos.values()) > PHOTOS_BYTES:
+                self.photos.popitem(last=False)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -105,7 +120,18 @@ class Handler(BaseHTTPRequestHandler):
             resp = e
         except (URLError, socket.timeout, OSError) as e:
             kodi.log('proxy: {} failed: {}'.format(path, e), xbmc.LOGWARNING)
-            return self.send_error(502)
+            if not self.send_kept(path):
+                announce(path, self.path, 'away')
+                self.send_error(502)
+            return
+        why = failure(resp.status)
+        if why in ('away', 'error') and self.send_kept(path):
+            resp.close()
+            return
+        if why:
+            announce(path, self.path, why)
+        keep = [] if self.command == 'GET' and resp.status == 200 and PHOTO.match(path) and VIEWED.search(self.path) \
+            else None
         with resp:
             self.send_response(resp.status)
             for k in RESPONSE_HEADERS:
@@ -113,16 +139,50 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_header(k, resp.headers[k])
             self.end_headers()
             if self.command == 'GET':
+                size = 0
                 try:
                     while True:
+                        reading = True
                         data = resp.read(CHUNK)
                         if not data or api.aborting():
                             break
+                        reading = False
                         self.wfile.write(data)
+                        size += len(data)
+                        if keep is not None:
+                            keep.append(data)
+                            if size > PHOTOS_BYTES:
+                                keep = None
                 except (IncompleteRead, OSError):
+                    if reading and resp.status in (200, 206):
+                        announce(path, self.path, 'cut')
                     return                      # Kodi hangs up when it seeks, or the server drops out
                 if resp.status in (200, 206):
                     announce(path, self.path)
+                if keep is not None and not api.aborting():
+                    self.server.keep(self.path, resp.headers.get('Content-Type'), b''.join(keep))
+
+    def send_kept(self, path):
+        """A recent photo again from its copy, while Immich can't send it; False without one."""
+        with self.server.photos_lock:
+            found = self.server.photos.get(self.path)
+            if found:
+                self.server.photos.move_to_end(self.path)
+        if not found:
+            return False
+        kodi.debug('proxy: {} sent from its copy'.format(path))
+        ctype, data = found
+        self.send_response(200)
+        self.send_header('Content-Type', ctype or 'image/jpeg')
+        self.send_header('Content-Length', str(len(data)))
+        self.end_headers()
+        if self.command == 'GET':
+            try:
+                self.wfile.write(data)
+            except OSError:
+                return True
+            announce(path, self.path)
+        return True
 
 
     def fanart(self, asset_id, base_url, api_key, person=False):
@@ -265,17 +325,28 @@ def retime(data, speed):
     return bytes(out)
 
 
-def announce(path, full):
-    """Tell the viewer a photo has been sent in full, so it can fade it in."""
+def failure(status):
+    """Why a photo failed, from Immich's answer: away, error (on the server), gone, or None when it didn't."""
+    if status < 400:
+        return None
+    if status in AWAY:
+        return 'away'
+    return 'error' if status >= 500 else 'gone'
+
+
+def announce(path, full, why=None):
+    """Tell the viewer a photo has been sent in full, so it can fade it in, or why it couldn't be."""
     found = PHOTO.match(path)
     if not found:
         return
     size = re.search(r'[?&]size=([a-z]+)', full)
     name = '{}:{}'.format(found.group(1), size.group(1) if size else 'thumbnail')
+    prop, entry = (FAILED, '{}@{:.3f}:{}'.format(name, time.time(), why)) if why else \
+        (DONE, '{}@{:.3f}'.format(name, time.time()))
     with _done_lock:
         window = xbmcgui.Window(10000)
-        kept = [e for e in window.getProperty(DONE).split() if e.rpartition('@')[0] != name]
-        window.setProperty(DONE, ' '.join(kept[-(DONE_KEEP - 1):] + ['{}@{:.3f}'.format(name, time.time())]))
+        kept = [e for e in window.getProperty(prop).split() if e.rpartition('@')[0] != name]
+        window.setProperty(prop, ' '.join(kept[-(DONE_KEEP - 1):] + [entry]))
 
 
 def start():

@@ -347,11 +347,18 @@ class Proxy(unittest.TestCase):
         time.sleep(0.2)
         self.assertEqual(self.done(since), [f'{self.asset}:fullsize'])
 
-    def test_cut_off_photo_not_announced(self):
-        settings = {'server_url': BROKEN, 'api_key': 'k'}
+    def failures(self, since):
+        entries = [e.rpartition('@') for e in xbmcgui.Window(10000).getProperty(proxy.FAILED).split()]
+        return [(name, rest.partition(':')[2]) for name, _, rest in entries if float(rest.partition(':')[0]) >= since]
+
+    def upstream(self, url):
+        settings = {'server_url': url, 'api_key': 'k'}
         with mock.patch.object(kodi, 'fresh_setting', side_effect=settings.get):
             self.monitor.onSettingsChanged()
         self.addCleanup(self.monitor.onSettingsChanged)
+
+    def test_cut_off_photo_not_announced(self):
+        self.upstream(BROKEN)
         since = time.time()
         with urlopen(f'{self.base}/api/assets/{self.asset}/thumbnail?size=fullsize', timeout=10) as resp:
             try:
@@ -360,6 +367,55 @@ class Proxy(unittest.TestCase):
                 pass
         time.sleep(0.2)
         self.assertEqual(self.done(since), [])
+        self.assertEqual(self.failures(since), [(f'{self.asset}:fullsize', 'cut')])
+
+    def test_missing_photo_reported_gone(self):
+        gone = '0000aaaa-0000-0000-0000-000000000000'
+        since = time.time()
+        with self.assertRaises(HTTPError) as got:
+            urlopen(f'{self.base}/api/assets/{gone}/thumbnail?size=preview', timeout=10)
+        self.assertEqual(got.exception.code, 404)
+        time.sleep(0.2)
+        self.assertEqual(self.failures(since), [(f'{gone}:preview', 'gone')])
+
+    def test_recent_photo_sent_again_while_immich_is_away(self):
+        url = f'{self.base}/api/assets/{self.asset}/thumbnail?size=preview&edited=true'
+        with urlopen(url, timeout=10) as resp:
+            photo = resp.read()
+        time.sleep(0.2)
+        self.upstream('http://127.0.0.1:1')
+        since = time.time()
+        with urlopen(url, timeout=10) as resp:
+            self.assertEqual((resp.status, resp.read()), (200, photo))
+        other = mock_immich.ASSETS[1]['id']
+        with self.assertRaises(HTTPError) as got:
+            urlopen(f'{self.base}/api/assets/{other}/thumbnail?size=preview&edited=true', timeout=10)
+        self.assertEqual(got.exception.code, 502)
+        time.sleep(0.2)
+        self.assertEqual(self.done(since), [f'{self.asset}:preview'])
+        self.assertEqual(self.failures(since), [(f'{other}:preview', 'away')])
+
+    def test_list_thumbnails_not_kept(self):
+        with urlopen(f'{self.base}/api/assets/{self.asset}/thumbnail?size=thumbnail', timeout=10) as resp:
+            resp.read()
+        time.sleep(0.2)
+        self.assertFalse([p for p in self.server.photos if 'size=thumbnail' in p])
+
+    def test_failure_reasons(self):
+        codes = (200, 304, 400, 401, 403, 404, 410, 429, 500, 501, 502, 503, 504)
+        self.assertEqual([proxy.failure(c) for c in codes],
+                         [None, None, 'gone', 'away', 'away', 'gone', 'gone', 'away', 'error', 'error', 'away', 'away',
+                          'away'])
+
+    def test_newest_photos_kept_within_bounds(self):
+        server = proxy.Server(0)
+        self.addCleanup(server.server_close)
+        for k in range(6):
+            server.keep(f'/p{k}', 'image/jpeg', b'x')
+        self.assertEqual(list(server.photos), ['/p2', '/p3', '/p4', '/p5'])
+        with mock.patch.object(proxy, 'PHOTOS_BYTES', 10):
+            server.keep('/big', 'image/jpeg', b'x' * 9)
+        self.assertEqual(list(server.photos), ['/p5', '/big'])
 
     def test_upstream_cut_off(self):
         errors = []
@@ -1132,6 +1188,10 @@ class Backdrop(unittest.TestCase):
 
 
 class Loading(NoProxy):
+    def setUp(self):
+        super().setUp()
+        xbmcgui.Window(10000).clearProperty(proxy.FAILED)
+
     def viewer(self):
         window = make_viewer(api.ImmichClient().search_page(size=5)[0])
         window.getControl = lambda i: Recorder()
@@ -1187,6 +1247,92 @@ class Loading(NoProxy):
         with mock.patch.object(window, 'setup', lambda: None), mock.patch.object(window, 'prepare', lambda *a: None):
             window.run()
         self.assertEqual(shown, [0])                # the first photo only: the next never arrived
+
+    def fail(self, name, why):
+        xbmcgui.Window(10000).setProperty(proxy.FAILED, f'{name}@{time.time()}:{why}')
+
+    def failing(self, window, index, why, now=None):
+        window.prepare(index, 1)
+        self.fail(window.waiting[1][0], why)
+        window.check_failed(now or time.time())
+
+    def test_tried_again_while_immich_is_away(self):
+        window = self.viewer()
+        self.announce('', 0)
+        window.shown = 0
+        now = time.time()
+        self.failing(window, 1, 'away', now)
+        self.assertEqual((window.resume, window.preload_at, window.prepared, window.tries),
+                         (1, now + viewer.RETRY, {}, {}))
+        self.assertEqual(window.upcoming(), 1)
+
+    def test_left_behind_by_why_it_failed(self):
+        for why, tries in viewer.TRIES.items():
+            with self.subTest(why=why):
+                window = self.viewer()
+                window.shown = 0
+                for k in range(tries):
+                    self.assertNotEqual(window.resume, 2)
+                    self.failing(window, 1, why)
+                self.assertEqual(window.resume, 2)
+
+    def test_leaving_many_behind_is_paced(self):
+        window = self.viewer()
+        window.shown = 0
+        now = time.time()
+        self.failing(window, 1, 'gone', now)
+        self.assertEqual((window.resume, window.preload_at), (2, now))
+        self.failing(window, 2, 'gone', now)
+        self.assertEqual((window.resume, window.preload_at), (3, now + viewer.RETRY))
+
+    def test_kept_photos_take_turns(self):
+        window = self.viewer()
+        ids = [a['id'] for a in window.assets]
+        xbmcgui.Window(10000).setProperty(proxy.DONE, ' '.join(f'{ids[k]}:fullsize@{k}' for k in range(4)) +
+                                          f' {ids[4]}:thumbnail@9')
+        window.index = 3
+        shown = []
+        window.display = lambda index, fade=None: shown.append(index)
+        window.show_kept()
+        self.assertEqual(shown, [0])                # the one shown longest ago, not the one on screen
+        self.announce('', 0)
+        window.show_kept()
+        self.assertEqual(shown, [0])                # nothing kept: the photo on screen stays
+        self.assertGreater(window.next_at, time.time())
+
+    def test_says_so_once_immich_is_away_a_minute(self):
+        window = self.viewer()
+        window.shown = 0
+        del xbmcgui.LOG[:]
+        now = time.time()
+        for t in (0, viewer.AWAY_NOTICE - 1, viewer.AWAY_NOTICE, viewer.AWAY_NOTICE + viewer.RETRY):
+            self.failing(window, 1, 'away', now + t)
+        self.assertEqual([e for e in xbmcgui.LOG if e[0] == 'notify'], [('notify', kodi.L(30703))])
+
+    def test_slideshow_steps_back_while_the_next_fails(self):
+        window = self.viewer()
+        self.announce('', 0)
+        shown = []
+        window.display = lambda index, fade=None: (shown.append(index), setattr(window, 'shown', 0),
+                                                   setattr(window, 'next_at', 1), setattr(window, 'preload_at', None))
+        window.show_kept = lambda: (shown.append('kept'), setattr(window, 'next_at', None))
+        ticks = []
+
+        class Ticking(xbmc.Monitor):
+            def waitForAbort(self, t=0):
+                ticks.append(t)
+                if len(ticks) == 5:
+                    window.actions.append(10)       # close
+                return False
+
+        window.monitor = Ticking()
+        name = f"{window.assets[1]['id']}:fullsize"
+        window.prepared[1] = (1, True)
+        window.waiting[1] = (name, time.time())
+        self.fail(name, 'away')
+        with mock.patch.object(window, 'setup', lambda: None), mock.patch.object(window, 'prepare', lambda *a: None):
+            window.run()
+        self.assertEqual((shown, window.resume), ([0, 'kept'], 1))
 
     def test_details_fetched_ahead(self):
         window = self.viewer()
