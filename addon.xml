@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.image.immich" name="Immich" version="0.3.19" provider-name="kel-mo">
+<addon id="plugin.image.immich" name="Immich" version="0.3.20" provider-name="kel-mo">
   <requires>
     <import addon="xbmc.python" version="3.1.1"/>
   </requires>
@@ -16,7 +16,10 @@
     <license>GPL-2.0-or-later</license>
     <source>https://github.com/kel-mo/plugin.image.immich</source>
     <website>https://immich.app</website>
-    <news>v0.3.19
+    <news>v0.3.20
+- The screensaver starts from a random one of the chosen albums, instead of always the same one
+- With Random album, the screensaver moves on to another album when one ends, instead of repeating it
+v0.3.19
 - Needs a Kodi 22 newer than RC1, with Python API 3.1.1
 - Rotated photos show at full resolution again
 - When paused, stepping to a moving photo plays its short clip once, slowed down
@@ -32,12 +35,7 @@ v0.3.15
 - Albums and people show one of their photos whole as the background, like the other folders. A person's is one they're alone in where possible
 v0.3.14
 - Photos play and list oldest first, so a trip runs from start to finish. Photo order in the settings turns it back
-- The months of a year go January to December; On this day keeps the latest year first
-v0.3.13
-- 0.3.12 said playing a video could no longer freeze Kodi for a minute. Sorry, that was wrong: the freeze is a Kodi 22 bug, fixed upstream in xbmc/xbmc#29548
-- The slideshow reads the screen size once, so it can no longer hold up another add-on the same way
-v0.3.12
-- Playing a video can no longer freeze Kodi for a minute</news>
+- The months of a year go January to December; On this day keeps the latest year first</news>
     <assets>
       <icon>resources/icon.png</icon>
       <fanart>resources/fanart.jpg</fanart>
