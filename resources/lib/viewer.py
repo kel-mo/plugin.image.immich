@@ -142,6 +142,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
             else:
                 kodi.notify(kodi.L(30702))
         self.info = 1 if kodi.setting_bool('captions') else 0   # 0 nothing, 1 caption, 2 caption and details
+        self.motion = kodi.setting_bool('motion')
         self.raws = {}
         self.quick = ImmichClient(self.client.base_url, self.client.api_key, timeout=5)
         self.monitor = Waker(self) if self.screensaver else xbmc.Monitor()
@@ -379,7 +380,7 @@ class Viewer(xbmcgui.WindowXMLDialog):
             # start once the poster is up
             self.video = {'id': asset['id'], 'at': self.shown_at + fade / 1000.0 + 0.3, 'started': False}
             self.next_at = None
-        elif asset.get('live') and not self.playing:   # stepped to by hand: a moving photo plays its clip once
+        elif asset.get('live') and self.motion and not self.playing:   # stepped to by hand: a moving photo plays its clip once
             self.video = {'id': asset['live'], 'at': self.preload_at, 'started': False, 'clip': True}
 
     def pan_zoom(self, main, fade, resume=False, delay=0):

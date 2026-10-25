@@ -240,6 +240,14 @@ msgctxt "#30223"
 msgid "For months, years, albums, people, places, favourites and memories, in lists and slideshows. Search results stay best match first."
 msgstr ""
 
+msgctxt "#30224"
+msgid "Play moving photo clips"
+msgstr ""
+
+msgctxt "#30225"
+msgid "When you step to a moving photo by hand, its short clip plays once, slowed down."
+msgstr ""
+
 msgctxt "#30300"
 msgid "Browsing"
 msgstr ""

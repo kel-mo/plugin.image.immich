@@ -135,6 +135,11 @@
           <default>true</default>
           <control type="toggle"/>
         </setting>
+        <setting id="motion" type="boolean" label="30224" help="30225">
+          <level>0</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
       </group>
       <group id="2">
         <setting id="captions" type="boolean" label="30211" help="30212">

@@ -1399,7 +1399,7 @@ class Loading(NoProxy):
 
 class MovingPhotos(NoProxy):
     """A photo stepped to by hand plays its Immich clip once; a running slideshow shows stills."""
-    def viewer(self, playing=False):
+    def viewer(self, playing=False, motion=True):
         assets = api.ImmichClient().search_page(size=2)[0]
         for a in assets:
             a['image'] = True
@@ -1407,7 +1407,7 @@ class MovingPhotos(NoProxy):
         window = make_viewer(assets)
         window.playing = playing
         window.getControl = lambda i: Recorder()
-        with mock.patch.object(kodi, 'setting_bool', lambda k: False):
+        with mock.patch.object(kodi, 'setting_bool', lambda k: motion and k == 'motion'):
             window.setup()
             window.display(0)
         return window
@@ -1420,6 +1420,12 @@ class MovingPhotos(NoProxy):
 
     def test_slideshow_shows_stills(self):
         self.assertIsNone(self.viewer(playing=True).video)
+
+    def test_clips_off_shows_stills(self):
+        self.assertIsNone(self.viewer(motion=False).video)
+
+    def test_clips_are_off_by_default(self):
+        self.assertEqual(xbmcaddon.SETTINGS['motion'], 'false')
 
     def test_clip_plays_slowed_through_the_proxy(self):
         window = self.viewer()
