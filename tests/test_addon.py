@@ -414,8 +414,8 @@ class Proxy(unittest.TestCase):
         avif = next(a['id'] for a in mock_immich.ASSETS if a['n'] % 7 == 3)
         with urlopen(f'{self.base}/api/assets/{avif}/thumbnail?size=preview&edited=true', timeout=10) as resp:
             preview = resp.read()
-        for method in ('HEAD', 'GET'):
-            with urlopen(Request(f'{self.base}/api/assets/{avif}/thumbnail?size=fullsize', method=method),
+        for method, headers in (('HEAD', {}), ('GET', {}), ('GET', {'Range': 'bytes=0-'})):     # the last as Kodi asks
+            with urlopen(Request(f'{self.base}/api/assets/{avif}/thumbnail?size=fullsize', method=method, headers=headers),
                          timeout=10) as resp:
                 self.assertEqual((resp.headers['Content-Type'], resp.read()), ('image/png', b'' if method == 'HEAD' else preview))
 

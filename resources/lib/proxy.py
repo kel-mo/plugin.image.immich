@@ -120,7 +120,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             resp = urlopen(req, timeout=TIMEOUT, context=self.server.ssl_ctx)
             ctype = resp.headers.get_content_type()
-            if resp.status == 200 and PHOTO.match(path) and FULLSIZE.search(self.path) and ctype in UNDECODABLE:
+            if whole(resp) and PHOTO.match(path) and FULLSIZE.search(self.path) and ctype in UNDECODABLE:
                 kodi.debug('proxy: {} is {}, sending its preview'.format(path, ctype))
                 resp.close()
                 req = Request('{}{}?size=preview&edited=true'.format(base_url, path), headers=headers, method=self.command)
