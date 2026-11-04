@@ -35,7 +35,7 @@ def asset_item(client, asset, path=None, size='preview'):
     label = when(asset['taken']) or asset['id']
     thumb = client.thumb_url(asset['id'])
     if asset['image']:
-        url = client.thumb_url(asset['id'], size)
+        url = client.thumb_url(asset['id'], size, named=size == 'fullsize')
     else:
         url = video_path(asset['id'])
     li = xbmcgui.ListItem(label, place(asset), path=path or url, offscreen=True)

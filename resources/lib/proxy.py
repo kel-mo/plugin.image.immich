@@ -42,6 +42,7 @@ PHOTOS_KEPT = 4                          # recent photos sent again while Immich
 PHOTOS_BYTES = 64 * 1024 * 1024
 AWAY = {401, 403, 429, 502, 503, 504}    # Immich out of reach, or turning every photo away
 UNDECODABLE = {'image/avif'}             # originals LibreELEC's Kodi can't show over http
+SNIFFED = {'image/jpeg', 'image/png', 'image/tiff', 'image/webp'}   # Kodi decodes these whatever the name says
 RANGE = re.compile(r'bytes=(\d*)-(\d*)$')
 WHOLE = re.compile(r'bytes 0-(\d+)/(\d+)$')    # a 206 that is the whole file: Kodi asks for bytes=0-
 ALLOWED = re.compile(r'/api/(assets/[0-9a-f-]+/(thumbnail|original|video/playback)|people/[0-9a-f-]+/thumbnail)$')
@@ -103,7 +104,10 @@ class Handler(BaseHTTPRequestHandler):
         self.relay()
 
     def relay(self):
-        path = self.path.split('?', 1)[0]
+        path, ask, query = self.path.partition('?')
+        named = path.endswith('.jpg') and bool(PHOTO.match(path[:-4]))     # see api.thumb_url
+        if named:
+            path = path[:-4]
         if self.headers.get('Host') not in self.server.hosts:   # DNS rebinding
             return self.send_error(403)
         base_url, api_key = self.server.upstream
@@ -116,11 +120,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_error(404)
         headers = {k: self.headers[k] for k in REQUEST_HEADERS if self.headers.get(k)}
         headers['x-api-key'] = api_key
-        req = Request(base_url + self.path, headers=headers, method=self.command)
+        req = Request(base_url + path + ask + query, headers=headers, method=self.command)
         try:
             resp = urlopen(req, timeout=TIMEOUT, context=self.server.ssl_ctx)
             ctype = resp.headers.get_content_type()
-            if whole(resp) and PHOTO.match(path) and FULLSIZE.search(self.path) and ctype in UNDECODABLE:
+            if whole(resp) and PHOTO.match(path) and FULLSIZE.search(self.path) and \
+                    (ctype in UNDECODABLE or named and ctype not in SNIFFED):
                 kodi.debug('proxy: {} is {}, sending its preview'.format(path, ctype))
                 resp.close()
                 req = Request('{}{}?size=preview&edited=true'.format(base_url, path), headers=headers, method=self.command)

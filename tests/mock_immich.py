@@ -211,7 +211,7 @@ class Handler(BaseHTTPRequestHandler):
         if len(parts) == 4 and parts[2] == 'assets' and parts[3] in BY_ID:
             a = BY_ID[parts[3]]
             dto = asset_dto(a)
-            dto['originalMimeType'] = 'image/avif' if a['n'] % 7 == 3 else 'image/jpeg'
+            dto['originalMimeType'] = {3: 'image/avif', 5: 'image/gif'}.get(a['n'] % 7, 'image/jpeg')
             dto['originalFileName'] = 'IMG_{:04d}.jpg'.format(a['n'])
             dto['exifInfo'].update(make='Google', model='Pixel 9 Pro XL', fNumber=1.7, iso=100, exposureTime='1/120',
                                    lensModel='Pixel 9 Pro XL back camera 6.9mm f/1.68', focalLength=6.9)
@@ -222,6 +222,8 @@ class Handler(BaseHTTPRequestHandler):
             if parts[4] == 'thumbnail':
                 if q.get('size') == 'fullsize' and a['n'] % 7 == 3:     # fullsize is the original, AVIF here
                     return self.send(200, b'\0\0\0\x1cftypavif', 'image/avif')
+                if q.get('size') == 'fullsize' and a['n'] % 7 == 5:     # and a GIF here
+                    return self.send(200, b'GIF89a\x01\0\x01\0\0\0\0;', 'image/gif')
                 return self.send(200, png(a, 250 if q.get('size') == 'thumbnail' else 1440), 'image/png')
             if parts[4] == 'original':                  # as a moving photo's clip
                 return self.send(200, clip_mp4(), 'video/mp4')

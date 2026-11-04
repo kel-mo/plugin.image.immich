@@ -419,6 +419,42 @@ class Proxy(unittest.TestCase):
                          timeout=10) as resp:
                 self.assertEqual((resp.headers['Content-Type'], resp.read()), ('image/png', b'' if method == 'HEAD' else preview))
 
+    def test_name_for_kodi_left_out_upstream(self):
+        named = f'{self.base}/api/assets/{self.asset}/thumbnail.jpg?size=fullsize'
+        with urlopen(f'{self.base}/api/assets/{self.asset}/thumbnail?size=fullsize', timeout=10) as resp:
+            photo = resp.read()
+        since = time.time()
+        with urlopen(named, timeout=10) as resp:
+            self.assertEqual((resp.status, resp.read()), (200, photo))
+        with urlopen(Request(named, method='HEAD'), timeout=10) as resp:
+            self.assertEqual((resp.status, resp.read()), (200, b''))
+        with urlopen(Request(named, headers={'Range': 'bytes=10-19'}), timeout=10) as resp:   # as for a gain map
+            self.assertEqual((resp.status, resp.headers['Content-Range'], resp.read()),
+                             (206, f'bytes 10-19/{len(photo)}', photo[10:20]))
+        time.sleep(0.2)
+        self.assertEqual(self.done(since), [f'{self.asset}:fullsize'])
+        self.assertEqual(self.failures(since), [])
+        self.assertEqual(self.server.photos[named[len(self.base):]][1], photo)
+        for other in (f'/api/assets/{self.asset}/original.jpg', f'/api/people/{mock_immich.PEOPLE[0]["id"]}/thumbnail.jpg'):
+            with self.subTest(other=other), self.assertRaises(HTTPError) as got:
+                urlopen(f'{self.base}{other}', timeout=10)
+            self.assertEqual(got.exception.code, 404)
+
+    def test_named_photo_kodi_cannot_tell_sent_as_its_preview(self):
+        for n in (3, 5):                                # AVIF, GIF
+            asset = next(a['id'] for a in mock_immich.ASSETS if a['n'] % 7 == n)
+            with urlopen(f'{self.base}/api/assets/{asset}/thumbnail?size=preview&edited=true', timeout=10) as resp:
+                preview = resp.read()
+            for method, headers in (('HEAD', {}), ('GET', {}), ('GET', {'Range': 'bytes=0-'})):
+                with self.subTest(n=n, method=method, headers=headers), \
+                        urlopen(Request(f'{self.base}/api/assets/{asset}/thumbnail.jpg?size=fullsize', method=method,
+                                        headers=headers), timeout=10) as resp:
+                    self.assertEqual((resp.headers['Content-Type'], resp.read()),
+                                     ('image/png', b'' if method == 'HEAD' else preview))
+        gif = next(a['id'] for a in mock_immich.ASSETS if a['n'] % 7 == 5)
+        with urlopen(f'{self.base}/api/assets/{gif}/thumbnail?size=fullsize', timeout=10) as resp:
+            self.assertEqual(resp.headers['Content-Type'], 'image/gif')       # unnamed, so the viewer's choice
+
     def test_list_thumbnails_not_kept(self):
         with urlopen(f'{self.base}/api/assets/{self.asset}/thumbnail?size=thumbnail', timeout=10) as resp:
             resp.read()
@@ -1180,6 +1216,10 @@ class KodiViewer(NoProxy):
         self.assertTrue(self.listed())
         self.assertTrue(all('size=fullsize' in url for url in self.listed()))
         self.assertTrue(all('size=preview' in url for url in self.listed(hires='false')))
+
+    def test_full_resolution_named_as_a_jpeg(self):
+        self.assertTrue(all('/thumbnail.jpg?' in url for url in self.listed()))      # or Kodi skips the gain map
+        self.assertFalse([url for url in self.listed(hires='false') if '.jpg' in url])
 
     def test_needs_the_download_permission(self):
         self.assertTrue(all('size=preview' in url for url in self.listed(perms=['asset.read'])))

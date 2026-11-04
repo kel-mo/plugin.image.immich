@@ -227,9 +227,10 @@ class ImmichClient:
         """Kodi fetches these through the local proxy, which adds the API key."""
         return proxy_address() + self.url(path, **params)[len(self.base_url):]
 
-    def thumb_url(self, asset_id, size='thumbnail'):
+    def thumb_url(self, asset_id, size='thumbnail', named=False):
+        """named: ends in .jpg, as Kodi's slideshow only looks for a gain map then; the proxy drops it."""
         # fullsize only falls back to the original when edits are not requested
-        return self.media_url('/assets/{}/thumbnail'.format(asset_id), size=size,
+        return self.media_url('/assets/{}/thumbnail{}'.format(asset_id, '.jpg' if named else ''), size=size,
                               edited=None if size == 'fullsize' else 'true')
 
     def fanart_url(self, asset_id):
