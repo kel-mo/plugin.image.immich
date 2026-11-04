@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.image.immich" name="Immich" version="0.3.20" provider-name="kel-mo">
+<addon id="plugin.image.immich" name="Immich" version="0.3.21" provider-name="kel-mo">
   <requires>
     <import addon="xbmc.python" version="3.1.1"/>
   </requires>
@@ -16,7 +16,11 @@
     <license>GPL-2.0-or-later</license>
     <source>https://github.com/kel-mo/plugin.image.immich</source>
     <website>https://immich.app</website>
-    <news>v0.3.20
+    <news>v0.3.21
+- Moving photo clips are off unless you turn on "Play moving photo clips" in the Slideshow settings
+- In the Kodi picture viewer with Full resolution, Ultra HDR photos can show in HDR on a future Kodi with HDR photo support
+- In the Kodi picture viewer with Full resolution, AVIF photos come as their preview, as some Kodi builds can't show AVIF
+v0.3.20
 - The screensaver starts from a random one of the chosen albums, instead of always the same one
 - With Random album, the screensaver moves on to another album when one ends, instead of repeating it
 v0.3.19
@@ -32,10 +36,7 @@ v0.3.17
 v0.3.16
 - The screensaver can show the albums you choose, or one random album each time it starts
 v0.3.15
-- Albums and people show one of their photos whole as the background, like the other folders. A person's is one they're alone in where possible
-v0.3.14
-- Photos play and list oldest first, so a trip runs from start to finish. Photo order in the settings turns it back
-- The months of a year go January to December; On this day keeps the latest year first</news>
+- Albums and people show one of their photos whole as the background, like the other folders. A person's is one they're alone in where possible</news>
     <assets>
       <icon>resources/icon.png</icon>
       <fanart>resources/fanart.jpg</fanart>
